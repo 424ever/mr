@@ -1,0 +1,133 @@
+This is simple-document.info, produced by makeinfo version 7.2 from
+xinyminutes.texi.
+
+Copyright © YEAR MY NAME
+
+     Permission is granted to copy, distribute and/or modify this
+     document under the terms of the GNU Free Documentation License,
+     Version 1.3 or any later version published by the Free Software
+     Foundation; with no Invariant Sections, no Front-Cover Texts, and
+     no Back-Cover Texts.  A copy of the license is included in the
+     section entitled "GNU Free Documentation License".
+
+
+File: simple-document.info,  Node: Top,  Next: Introduction,  Up: (dir)
+
+simple-document
+***************
+
+This document quickly describes Texinfo features.
+
+* Menu:
+
+* Introduction::           A short summary of the chapter
+
+-- The Detailed Node Listing --
+
+Introduction
+
+* Formatting::             How to format text nicely
+* Links::                  Linking to other resources, pages, or manuals
+
+
+File: simple-document.info,  Node: Introduction,  Prev: Top,  Up: Top
+
+1 Introduction
+**************
+
+Each node must have the same name as the menu item that was defined in
+the ToC.
+
+* Menu:
+
+* Formatting::
+* Links::
+
+
+File: simple-document.info,  Node: Formatting,  Next: Links,  Up: Introduction
+
+1.1 Formatting
+==============
+
+Similar to chapters, sections must have the same name and appear in the
+same order.
+
+1.1.1 This is a subsection title
+--------------------------------
+
+1.1.1.1 This is a sub-subsection title
+......................................
+
+Each block of text is a paragraph.  You can use multiple lines for the
+paragraph like so, only empty lines separate paragraphs.
+
+   Common formatting include _emphasis_, ‘inline code’.  Specific type
+of text can be marked as well: ‘file.txt’, ‘--learn-fast’, ‘ls’ or
+VARIABLE.  You can escape the command character like so: @, and a
+newline with a single @ at the end of the line.
+
+   You can add different types of blocks:
+
+     Here is an example
+
+     '(this is lisp code)
+
+   • An element in an unordered list
+   • A second element in the same list
+
+  1. This list is similar
+  2. But ordered
+
+     A quotation block, by someone famous maybe
+
+element title
+     element description
+
+second element title
+     second element description.  Note that the description part can
+     span multiple paragraphs, contain other blocks etc.  This is
+     usually used as a definition list.
+
+     ‘@asis’ wraps the element title, and tells Texinfo to use them
+     as-is.
+
+‘do-x’
+
+ -- Kind of Function: function_name ARG1 ARG2 ARG3 ARG4 [OPTIONAL5]
+     This text describes the function.  Note how we could use multiple
+     lines for the function synopsis by escaping the line with a single
+     @.
+
+     This again can contain multiple paragraphs or blocks.
+
+
+File: simple-document.info,  Node: Links,  Prev: Formatting,  Up: Introduction
+
+1.2 Links
+=========
+
+There are various types of links you can use.  A simple link to a URL
+with <https://github.com> and optionally with it a title: GitHub
+(https://github.com).  An email address <me@me.me>.  A node in this
+document, *Note Introduction::.  Always use the exact node name for that
+one.  ‘xref’ will include the text "see" before the link.  To insert
+something different, use *note Introduction:: ("See") or *Note
+Introduction:: (nothing is inserted).  With an additional argument, you
+can change the text of the link, *Note this introduction: Introduction.
+
+   It is possible to link to external manuals with these commands by
+adding *Note (texinfo)Overview:: for the complete reference on Texinfo!
+
+
+Tag Table:
+Node: Top514
+Node: Introduction915
+Node: Formatting1135
+Node: Links2760
+
+End Tag Table
+
+
+Local Variables:
+coding: utf-8
+End:

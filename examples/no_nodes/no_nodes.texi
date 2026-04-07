@@ -1,0 +1,16 @@
+@copying
+This manual is for program (version version, updated
+date), which ...
+
+Copyright @copyright{} years copyright-owner.
+
+@quotation
+Permission is granted to ...
+@end quotation
+@end copying
+@dircategory Software
+@direntry
+* 1
+* 2
+* 3
+@end direntry

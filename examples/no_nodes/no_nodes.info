@@ -1,0 +1,24 @@
+This is no_nodes.info, produced by makeinfo version 7.2 from
+no_nodes.texi.
+
+This manual is for program (version version, updated date), which ...
+
+   Copyright © years copyright-owner.
+
+     Permission is granted to ...
+INFO-DIR-SECTION Software
+START-INFO-DIR-ENTRY
+* 1
+* 2
+* 3
+END-INFO-DIR-ENTRY
+
+
+Tag Table:
+
+End Tag Table
+
+
+Local Variables:
+coding: utf-8
+End:

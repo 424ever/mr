@@ -1,0 +1,11 @@
+[package]
+name = "mr"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+winnow = { version = "1.0.1", features = ["parser"]}
+
+[[example]]
+name = "no_nodes"
