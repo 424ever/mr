@@ -125,16 +125,16 @@ fn node(input: &mut &str) -> Result<Node> {
 
     seq! {Node {
         _:separator.context("separator".expected()),
-        _:("File:",repeated_whitespace),
-        file:take_until_and_consume(1.., ",").map(|s:&str|s.to_string()),
-        _:repeated_whitespace,
-        _:("Node:",repeated_whitespace),
-        node:id,
-        _:(",",repeated_whitespace),
-        next:opt(delimited(("Next:",repeated_whitespace), id, (",",repeated_whitespace))),
-        prev:opt(delimited(("Prev:",repeated_whitespace), id, (",",repeated_whitespace))),
-        _:("Up:",repeated_whitespace),
-        up:id,
+        _:("File:",repeated_whitespace).context("node file text".expected()),
+        file:take_until_and_consume(1.., ",").context("node file name".expected()).map(|s:&str|s.to_string()),
+        _:repeated_whitespace.context("whitespace".expected()),
+        _:("Node:",repeated_whitespace).context("node name text".expected()),
+        node:id.context("node name id".expected()),
+        _:(",".context("comma".expected()),repeated_whitespace.context("whitespace".expected())),
+        next:opt(delimited(("Next:".context("node next text".expected()),repeated_whitespace.context("whitespace".expected())), id.context("node next".expected()), (",",repeated_whitespace))),
+        prev:opt(delimited(("Prev:".context("node prev text".expected()),repeated_whitespace), id.context("node prev".expected()), (",",repeated_whitespace))),
+        _:("Up:".context("node up text".expected()),repeated_whitespace),
+        up:id.context("node up".expected()),
         _:"\n",
         general_text:repeat_till(0..,any,alt((eof.map(|_|()),peek(separator).map(|_|())))).context("general text".label()).map(|(s,_)|s),
     }}
@@ -151,12 +151,13 @@ pub struct Id {
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
 fn id(input: &mut &str) -> Result<Id> {
     seq! {Id{
-        infofile: opt(delimited('(', take_until(1.., ')').map(|s:&str| s.to_string()), ')')),
+        infofile: opt(delimited('(', take_until(1.., ')').map(|s:&str| s.to_string()), ')')).context("infofile".expected()),
         nodename: opt(alt((
-            repeat(1..,none_of([DELETE, '.', ',', ':', '(', ')', '\n'])),
+            repeat(1..,none_of([DELETE, ',', '\n'])),
             delimited(delete, take_until(1.., DELETE).map(|s:&str| s.to_string()), delete),
-        ))),
+        ))).context("nodename".expected()),
     }}
+    .context("node id".label())
     .parse_next(input)
 }
 
@@ -261,4 +262,44 @@ pub struct IndirectEntry {
 
 fn indirect_entry(input: &mut &str) -> Result<IndirectEntry> {
     todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::info::{Id, Node, node};
+
+    #[test]
+    fn node_name_with_special_chars() {
+        let mut input = concat!(
+            "\n",
+            "File: file.info,  Node: node: 1,  Next: node (2),  Prev: (other)node 0,  Up: (dir)\n",
+            "\n",
+            "\n",
+        );
+        let node = node(&mut input);
+        assert!(node.is_ok());
+        assert_eq!(
+            node,
+            Ok(Node {
+                file: "file.info".to_string(),
+                node: Id {
+                    infofile: None,
+                    nodename: Some("node: 1".to_string())
+                },
+                next: Some(Id {
+                    infofile: None,
+                    nodename: Some("node (2)".to_string())
+                }),
+                prev: Some(Id {
+                    infofile: Some("other".to_string()),
+                    nodename: Some("node 0".to_string())
+                }),
+                up: Id {
+                    infofile: Some("dir".to_string()),
+                    nodename: None
+                },
+                general_text: "\n".to_string()
+            })
+        );
+    }
 }
