@@ -2,7 +2,7 @@
 mod control;
 mod info;
 
-pub use info::manual_main_file;
+pub use info::parse_nonsplit_manual;
 use std::fmt::Debug;
 use winnow::{
     Parser,

@@ -10,7 +10,7 @@ use winnow::{
         alt, delimited, dispatch, eof, fail, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
     },
-    error::StrContext,
+    error::{ContextError, ParseError, StrContext},
     stream::{Compare, Stream, StreamIsPartial},
     token::{any, none_of, one_of, take_till, take_until},
 };
@@ -25,19 +25,27 @@ fn space_or_tab(input: &mut &str) -> Result<char> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ManualMainFile {
+pub enum Manual {
     Nonsplit(NonsplitInfoFile),
-    Split(SplitInfoMainFile),
+    Split(SplitInfoMainFile, Vec<SplitInfoSubfile>),
+}
+
+impl Manual {
+    pub fn nodes(&self) -> impl Iterator<Item = &Node> {
+        match self {
+            Manual::Nonsplit(nonsplit) => nonsplit.nodes.iter(),
+            Manual::Split(split_info_main_file, split_info_subfiles) => todo!(),
+        }
+    }
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub fn manual_main_file(input: &mut &str) -> Result<ManualMainFile> {
-    alt((
-        nonsplit_info_file.map(ManualMainFile::Nonsplit),
-        split_manual_main_file.map(ManualMainFile::Split),
+pub fn parse_nonsplit_manual(input: &str) -> anyhow::Result<Manual> {
+    Ok(Manual::Nonsplit(
+        nonsplit_info_file
+            .parse(input)
+            .map_err(|e| anyhow::format_err!("{e}"))?,
     ))
-    .context("manual main file".label())
-    .parse_next(input)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +123,12 @@ pub struct Node {
     prev: Option<Id>,
     up: Id,
     general_text: String,
+}
+
+impl Node {
+    pub fn text(&self) -> &str {
+        &self.general_text
+    }
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html

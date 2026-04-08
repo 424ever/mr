@@ -2,9 +2,11 @@
 name = "mr"
 version = "0.1.0"
 edition = "2024"
+default-run = "mr"
 
 [dependencies]
 anyhow = "1.0.102"
+clap = { version = "4.6.0", features = ["derive"] }
 winnow = { version = "1.0.1", features = ["parser"]}
 
 [[example]]

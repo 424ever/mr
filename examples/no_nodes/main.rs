@@ -1,8 +1,6 @@
-use winnow::Parser;
-
 fn main() -> anyhow::Result<()> {
     let input = include_str!("no_nodes.info");
-    match mr::manual_main_file.parse(input) {
+    match mr::parse_nonsplit_manual(input) {
         Ok(f) => {
             dbg!(f);
         }
