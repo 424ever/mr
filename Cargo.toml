@@ -1,8 +1,13 @@
 [package]
 name = "mr"
 version = "0.1.0"
+authors = ["Jonas Brandstötter <jonas.brandstoetter@gmx.at>"]
 edition = "2024"
+description = "a manual reader"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
 default-run = "mr"
+repository = "https://github.com/424ever/mr.git"
 
 [dependencies]
 anyhow = "1.0.102"
