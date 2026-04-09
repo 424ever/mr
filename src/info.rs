@@ -5,7 +5,7 @@ use crate::{
 };
 use winnow::{
     Bytes, ModalResult, Parser, Result,
-    ascii::{self, line_ending, till_line_ending},
+    ascii::{self, line_ending, space1, till_line_ending},
     combinator::{
         alt, delimited, dispatch, eof, fail, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
@@ -18,10 +18,6 @@ use winnow::{
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 fn separator(input: &mut &str) -> Result<(Option<char>, char, Option<char>, char)> {
     (opt(form_feed), unit_separator, opt(form_feed), line_feed).parse_next(input)
-}
-
-fn space_or_tab(input: &mut &str) -> Result<char> {
-    one_of([' ', '\t']).parse_next(input)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,21 +129,17 @@ impl Node {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
 fn node(input: &mut &str) -> Result<Node> {
-    fn repeated_whitespace(input: &mut &str) -> Result<String> {
-        repeat(1.., space_or_tab).parse_next(input)
-    }
-
     seq! {Node {
         _:separator.context("separator".expected()),
-        _:("File:",repeated_whitespace).context("node file text".expected()),
+        _:("File:",space1).context("node file text".expected()),
         file:take_until_and_consume(1.., ",").context("node file name".expected()).map(|s:&str|s.to_string()),
-        _:repeated_whitespace.context("whitespace".expected()),
-        _:("Node:",repeated_whitespace).context("node name text".expected()),
+        _:space1.context("whitespace".expected()),
+        _:("Node:",space1).context("node name text".expected()),
         node:id.context("node name id".expected()),
-        _:(",".context("comma".expected()),repeated_whitespace.context("whitespace".expected())),
-        next:opt(delimited(("Next:".context("node next text".expected()),repeated_whitespace.context("whitespace".expected())), id.context("node next".expected()), (",",repeated_whitespace))),
-        prev:opt(delimited(("Prev:".context("node prev text".expected()),repeated_whitespace), id.context("node prev".expected()), (",",repeated_whitespace))),
-        _:("Up:".context("node up text".expected()),repeated_whitespace),
+        _:(",".context("comma".expected()),space1.context("whitespace".expected())),
+        next:opt(delimited(("Next:".context("node next text".expected()),space1.context("whitespace".expected())), id.context("node next".expected()), (",",space1))),
+        prev:opt(delimited(("Prev:".context("node prev text".expected()),space1), id.context("node prev".expected()), (",",space1))),
+        _:("Up:".context("node up text".expected()),space1),
         up:id.context("node up".expected()),
         _:"\n",
         general_text:repeat_till(0..,any,alt((eof.map(|_|()),peek(separator).map(|_|())))).context("general text".label()).map(|(s,_)|s),
