@@ -4,19 +4,23 @@ use crate::{
     take_until_and_consume,
 };
 use winnow::{
-    Bytes, ModalResult, Parser, Result,
+    Bytes, LocatingSlice, ModalResult, Parser, Result,
     ascii::{self, line_ending, space1, till_line_ending},
     combinator::{
         alt, delimited, dispatch, eof, fail, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
     },
     error::{ContextError, ParseError, StrContext},
-    stream::{Compare, Stream, StreamIsPartial},
+    stream::{Compare, Location, StreamIsPartial},
     token::{any, none_of, one_of, take_till, take_until},
 };
 
+pub(crate) type Stream<'i> = LocatingSlice<&'i str>;
+
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-fn separator(input: &mut &str) -> Result<(Option<char>, char, Option<char>, char)> {
+fn separator<'a>(
+    input: &mut Stream<'a>,
+) -> Result<(Option<&'a str>, &'a str, Option<&'a str>, &'a str)> {
     (opt(form_feed), unit_separator, opt(form_feed), line_feed).parse_next(input)
 }
 
@@ -39,7 +43,7 @@ impl Manual {
 pub fn parse_nonsplit_manual(input: &str) -> anyhow::Result<Manual> {
     Ok(Manual::Nonsplit(
         nonsplit_info_file
-            .parse(input)
+            .parse(LocatingSlice::new(input))
             .map_err(|e| anyhow::format_err!("{e}"))?,
     ))
 }
@@ -53,7 +57,7 @@ pub struct NonsplitInfoFile {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-fn nonsplit_info_file(input: &mut &str) -> Result<NonsplitInfoFile> {
+fn nonsplit_info_file(input: &mut Stream) -> Result<NonsplitInfoFile> {
     seq! {NonsplitInfoFile {
         preamble: preamble,
         nodes: repeat(0.., node),
@@ -73,7 +77,7 @@ pub struct SplitInfoMainFile {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-fn split_manual_main_file(input: &mut &str) -> Result<SplitInfoMainFile> {
+fn split_manual_main_file(input: &mut Stream) -> Result<SplitInfoMainFile> {
     seq! {SplitInfoMainFile{
         preamble:preamble,
         indirect_table:indirect_table,
@@ -91,7 +95,7 @@ pub struct SplitInfoSubfile {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-fn split_info_subfile(input: &mut &str) -> Result<SplitInfoSubfile> {
+fn split_info_subfile(input: &mut Stream) -> Result<SplitInfoSubfile> {
     seq! {SplitInfoSubfile{
         preamble:preamble,
         nodes:repeat(0..,node),
@@ -105,7 +109,7 @@ pub struct Preamble {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Preamble.html
-fn preamble(input: &mut &str) -> Result<Preamble> {
+fn preamble(input: &mut Stream) -> Result<Preamble> {
     // TODO: Don't bother parsing directory entries for now
     let content = repeat_till(1.., any, peek(separator)).parse_next(input)?.0;
     Ok(Preamble { content })
@@ -119,6 +123,8 @@ pub struct Node {
     prev: Option<Id>,
     up: Id,
     general_text: String,
+    /// Offset (in bytes) at which `general_text` starts within the file
+    text_offset: usize,
 }
 
 impl Node {
@@ -128,24 +134,66 @@ impl Node {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
-fn node(input: &mut &str) -> Result<Node> {
-    seq! {Node {
-        _:separator.context("separator".expected()),
-        _:("File:",space1).context("node file text".expected()),
-        file:take_until_and_consume(1.., ",").context("node file name".expected()).map(|s:&str|s.to_string()),
-        _:space1.context("whitespace".expected()),
-        _:("Node:",space1).context("node name text".expected()),
-        node:id.context("node name id".expected()),
-        _:(",".context("comma".expected()),space1.context("whitespace".expected())),
-        next:opt(delimited(("Next:".context("node next text".expected()),space1.context("whitespace".expected())), id.context("node next".expected()), (",",space1))),
-        prev:opt(delimited(("Prev:".context("node prev text".expected()),space1), id.context("node prev".expected()), (",",space1))),
-        _:("Up:".context("node up text".expected()),space1),
-        up:id.context("node up".expected()),
-        _:"\n",
-        general_text:repeat_till(0..,any,alt((eof.map(|_|()),peek(separator).map(|_|())))).context("general text".label()).map(|(s,_)|s),
-    }}
-    .context("node".label())
-    .parse_next(input)
+fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
+    _ = separator
+        .context("separator".expected())
+        .parse_next(input)?;
+    _ = ("File:", space1)
+        .context("node file text".expected())
+        .parse_next(input)?;
+    let file = take_until_and_consume(1.., ",")
+        .context("node file name".expected())
+        .map(|s: &str| s.to_string())
+        .parse_next(input)?;
+    _ = space1.context("whitespace".expected()).parse_next(input)?;
+    _ = ("Node:", space1)
+        .context("node name text".expected())
+        .parse_next(input)?;
+    let node = id.context("node name id".expected()).parse_next(input)?;
+    _ = (
+        ",".context("comma".expected()),
+        space1.context("whitespace".expected()),
+    )
+        .parse_next(input)?;
+    let next = opt(delimited(
+        (
+            "Next:".context("node next text".expected()),
+            space1.context("whitespace".expected()),
+        ),
+        id.context("node next".expected()),
+        (",", space1),
+    ))
+    .parse_next(input)?;
+    let prev = opt(delimited(
+        ("Prev:".context("node prev text".expected()), space1),
+        id.context("node prev".expected()),
+        (",", space1),
+    ))
+    .parse_next(input)?;
+    let _ = ("Up:".context("node up text".expected()), space1).parse_next(input)?;
+    let up = id.context("node up".expected()).parse_next(input)?;
+    let _ = "\n".parse_next(input)?;
+
+    let text_offset = input.current_token_start();
+
+    let general_text = repeat_till(
+        0..,
+        any,
+        alt((eof.map(|_| ()), peek(separator).map(|_| ()))),
+    )
+    .context("general text".label())
+    .map(|(s, _)| s)
+    .parse_next(input)?;
+
+    Ok(Node {
+        file,
+        node,
+        next,
+        prev,
+        up,
+        general_text,
+        text_offset,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,7 +203,7 @@ pub struct Id {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
-fn id(input: &mut &str) -> Result<Id> {
+fn id(input: &mut Stream) -> Result<Id> {
     seq! {Id{
         infofile: opt(delimited('(', take_until(1.., ')').map(|s:&str| s.to_string()), ')')).context("infofile".expected()),
         nodename: opt(alt((
@@ -174,7 +222,7 @@ pub struct TagTable {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Tag-Table.html
-fn tag_table(input: &mut &str) -> Result<TagTable> {
+fn tag_table(input: &mut Stream) -> Result<TagTable> {
     let _ = separator
         .context("separator".expected())
         .parse_next(input)?;
@@ -206,7 +254,7 @@ pub enum TagTableEntry {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Tag-Table.html
-fn tag_table_entry(input: &mut &str) -> Result<TagTableEntry> {
+fn tag_table_entry(input: &mut Stream) -> Result<TagTableEntry> {
     dispatch! {take_until_and_consume(3..=4, ": ");
         "Node" => tag.map(TagTableEntry::Node),
         "Ref" => tag.map(TagTableEntry::Ref),
@@ -222,7 +270,7 @@ pub struct Tag {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Tag-Table.html
-fn tag(input: &mut &str) -> Result<Tag> {
+fn tag(input: &mut Stream) -> Result<Tag> {
     seq! {Tag{
         nodeid: repeat_till(1.., any, delete).map(|(s,_): (String,_)| s).context(StrContext::Expected("nodeid".into())),
         bytepos: ascii::dec_uint.context(StrContext::Expected("bytepos".into())),
@@ -237,7 +285,7 @@ pub struct LocalVariables {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Local-Variables.html
-fn local_variables(input: &mut &str) -> Result<LocalVariables> {
+fn local_variables(input: &mut Stream) -> Result<LocalVariables> {
     let _ = separator.parse_next(input)?;
     let _ = "Local Variables:\n".parse_next(input)?;
 
@@ -256,7 +304,7 @@ pub struct IndirectTable {
     entries: Vec<IndirectEntry>,
 }
 
-fn indirect_table(input: &mut &str) -> Result<IndirectTable> {
+fn indirect_table(input: &mut Stream) -> Result<IndirectTable> {
     todo!()
 }
 
@@ -266,24 +314,28 @@ pub struct IndirectEntry {
     bytepos: u64,
 }
 
-fn indirect_entry(input: &mut &str) -> Result<IndirectEntry> {
+fn indirect_entry(input: &mut Stream) -> Result<IndirectEntry> {
     todo!()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::info::{Id, Node, node};
+    use winnow::LocatingSlice;
+
+    use crate::{
+        control::FORM_FEED,
+        info::{Id, Node, node},
+    };
 
     #[test]
     fn node_name_with_special_chars() {
-        let mut input = concat!(
-            "\n",
+        let mut input = LocatingSlice::new(concat!(
+            "\x1f\n",
             "File: file.info,  Node: node: 1,  Next: node (2),  Prev: (other)node 0,  Up: (dir)\n",
             "\n",
-            "\n",
-        );
+            "\x1f\n",
+        ));
         let node = node(&mut input);
-        assert!(node.is_ok());
         assert_eq!(
             node,
             Ok(Node {
@@ -304,7 +356,8 @@ mod tests {
                     infofile: Some("dir".to_string()),
                     nodename: None
                 },
-                general_text: "\n".to_string()
+                general_text: "\n".to_string(),
+                text_offset: 85,
             })
         );
     }
