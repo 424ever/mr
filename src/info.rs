@@ -1,4 +1,4 @@
-mod parse;
+pub mod parse;
 
 use std::fs;
 
@@ -28,8 +28,34 @@ impl NonsplitInfoFile {
         Manual::new(
             title,
             self.nodes
-                .into_iter()
-                .map(|n| n.general_text)
+                .iter()
+                .flat_map(|n| &n.general_text)
+                .map(|b| match &b.content {
+                    TextBlockContent::Paragraph(paragraph) => paragraph.lines.join("\n"),
+                    TextBlockContent::Menu(menu) => menu
+                        .items
+                        .iter()
+                        .map(|i| match i {
+                            MenuItem::Entry(entry) => {
+                                format!(
+                                    "{}::\t\t{}{}",
+                                    entry.id.nodename.as_ref().unwrap_or(&"".to_string()),
+                                    entry.description.join(" "),
+                                    "\n".repeat(entry.trailing_newlines)
+                                )
+                            }
+                            MenuItem::Comment(comment) => format!(
+                                "{}{}",
+                                &comment.lines.join(" "),
+                                "\n".repeat(comment.trailing_newlines)
+                            ),
+                        })
+                        .fold(String::new(), |mut s, it| {
+                            s.push_str(&it);
+                            s
+                        }),
+                    TextBlockContent::Printindex(_printindex) => todo!(),
+                })
                 .collect::<Vec<_>>()
                 .join("\n\n"),
         )
@@ -62,9 +88,67 @@ pub struct Node {
     next: Option<Id>,
     prev: Option<Id>,
     up: Id,
-    general_text: String,
+    general_text: Vec<TextBlock>,
     /// Offset (in bytes) at which `general_text` starts within the file
-    text_offset: usize,
+    start_offset: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextBlock {
+    /// Offset (in bytes) from the start of the file where `content` starts
+    start_offset: usize,
+    /// Offset (in bytes) from the start of the file where `content` ends
+    end_offset: usize,
+    content: TextBlockContent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TextBlockContent {
+    Paragraph(Paragraph),
+    Menu(Menu),
+    Printindex(Printindex),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Paragraph {
+    lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Menu {
+    items: Vec<MenuItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuItem {
+    Entry(MenuEntry),
+    Comment(MenuComment),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuEntry {
+    label: Option<String>,
+    description: Vec<String>,
+    id: Id,
+    trailing_newlines: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuComment {
+    lines: Vec<String>,
+    trailing_newlines: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Printindex {
+    entries: Vec<IndexEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexEntry {
+    text: String,
+    node_spec: String,
+    line_spec: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

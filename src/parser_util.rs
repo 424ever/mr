@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use winnow::{
     Parser,
+    combinator::repeat,
     error::{ParserError, StrContext, StrContextValue},
     stream::{Compare, FindSlice, Range, Stream, StreamIsPartial},
     token::take_until,
@@ -21,6 +22,18 @@ where
         winnow::token::literal(literal.clone()).parse_next(input)?;
         res
     }
+}
+
+pub fn count<Input, ParseNext, Output, Error>(
+    occurrences: impl Into<Range>,
+    parse_next: ParseNext,
+) -> impl Parser<Input, usize, Error>
+where
+    Input: Stream,
+    ParseNext: Parser<Input, Output, Error>,
+    Error: ParserError<Input>,
+{
+    repeat(occurrences, parse_next)
 }
 
 pub trait StrContextExt {
