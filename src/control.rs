@@ -1,7 +1,7 @@
 /// Parsers for C0 and C1 control codes.
 /// See https://en.wikipedia.org/wiki/C0_and_C1_control_codes
 use winnow::{
-    Bytes, Parser, Result,
+    Parser, Result,
     stream::{Compare, Stream, StreamIsPartial},
     token,
 };

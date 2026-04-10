@@ -1,19 +1,18 @@
 use super::*;
 use crate::{
-    StrContextExt,
     control::{DELETE, delete, form_feed, line_feed, unit_separator},
-    take_until_and_consume,
+    parser_util::StrContextExt,
+    parser_util::take_until_and_consume,
 };
 use winnow::{
-    Bytes, LocatingSlice, ModalResult, Parser, Result,
+    LocatingSlice, Parser, Result,
     ascii::{self, line_ending, space1, till_line_ending},
     combinator::{
-        alt, delimited, dispatch, eof, fail, opt, peek, preceded, repeat, repeat_till, seq,
-        terminated,
+        alt, delimited, dispatch, eof, fail, opt, peek, repeat, repeat_till, seq, terminated,
     },
-    error::{ContextError, ParseError, StrContext},
-    stream::{Compare, Location, StreamIsPartial},
-    token::{any, none_of, one_of, take_till, take_until},
+    error::StrContext,
+    stream::Location,
+    token::{any, none_of, take_until},
 };
 
 type Stream<'i> = LocatingSlice<&'i str>;
@@ -37,6 +36,7 @@ pub(super) fn nonsplit_info_file(input: &mut Stream) -> Result<NonsplitInfoFile>
     .parse_next(input)
 }
 
+#[expect(dead_code)]
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 fn split_manual_main_file(input: &mut Stream) -> Result<SplitInfoMainFile> {
     seq! {SplitInfoMainFile{
@@ -49,6 +49,7 @@ fn split_manual_main_file(input: &mut Stream) -> Result<SplitInfoMainFile> {
     .parse_next(input)
 }
 
+#[expect(dead_code)]
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 fn split_info_subfile(input: &mut Stream) -> Result<SplitInfoSubfile> {
     seq! {SplitInfoSubfile{
@@ -201,11 +202,12 @@ fn local_variables(input: &mut Stream) -> Result<LocalVariables> {
     vars
 }
 
-fn indirect_table(input: &mut Stream) -> Result<IndirectTable> {
+fn indirect_table(_input: &mut Stream) -> Result<IndirectTable> {
     todo!()
 }
 
-fn indirect_entry(input: &mut Stream) -> Result<IndirectEntry> {
+#[expect(dead_code)]
+fn indirect_entry(_input: &mut Stream) -> Result<IndirectEntry> {
     todo!()
 }
 
@@ -214,10 +216,7 @@ mod tests {
     use winnow::LocatingSlice;
 
     use super::node;
-    use crate::{
-        control::FORM_FEED,
-        info::{Id, Node},
-    };
+    use crate::info::{Id, Node};
 
     #[test]
     fn node_name_with_special_chars() {

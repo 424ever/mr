@@ -1,7 +1,7 @@
+use mr::info::parse_nonsplit_manual;
 use std::fs;
 
 use clap::Parser;
-use mr::parse_nonsplit_manual;
 
 #[derive(Parser)]
 struct Cli {
@@ -15,9 +15,7 @@ fn main() -> anyhow::Result<()> {
     let content = fs::read_to_string(cli.file)?;
     let manual = parse_nonsplit_manual(&content)?;
 
-    for node in manual.nodes() {
-        println!("{}", node.text());
-    }
+    for _node in manual.nodes() {}
 
     Ok(())
 }
