@@ -12,6 +12,7 @@ repository = "https://github.com/424ever/mr.git"
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.6.0", features = ["derive"] }
+sapling-streampager = "0.12.0"
 winnow = { version = "1.0.1", features = ["parser"]}
 
 [[example]]

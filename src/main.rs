@@ -1,7 +1,7 @@
-use mr::info::parse_nonsplit_manual;
-use std::fs;
+use std::{io::Cursor, thread};
 
 use clap::Parser;
+use mr::{Manual, info};
 
 #[derive(Parser)]
 struct Cli {
@@ -12,10 +12,29 @@ struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let content = fs::read_to_string(cli.file)?;
-    let manual = parse_nonsplit_manual(&content)?;
+    let manual = info::parse_nonsplit_manual(&cli.file)?;
 
-    for _node in manual.nodes() {}
+    show_manual(&manual)?;
+
+    Ok(())
+}
+
+fn show_manual(man: &Manual) -> anyhow::Result<()> {
+    let mut buf: Vec<u8> = vec![];
+
+    let mut pager = streampager::Pager::new_using_system_terminal()?;
+    pager.set_scroll_past_eof(false);
+    pager.set_read_ahead_lines(usize::MAX / 2);
+
+    man.render(&mut buf)?;
+    pager.add_stream(Cursor::new(buf), man.title())?;
+
+    let pager_thread = thread::spawn(move || -> anyhow::Result<()> {
+        pager.run()?;
+        Ok(())
+    });
+
+    pager_thread.join().unwrap()?;
 
     Ok(())
 }

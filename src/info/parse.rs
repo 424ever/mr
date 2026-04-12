@@ -25,7 +25,7 @@ fn separator<'a>(
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub(super) fn nonsplit_info_file(input: &mut Stream) -> Result<NonsplitInfoFile> {
+pub fn nonsplit_info_file(input: &mut Stream) -> Result<NonsplitInfoFile> {
     seq! {NonsplitInfoFile {
         preamble: preamble,
         nodes: repeat(0.., node),
@@ -109,7 +109,7 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
 
     let text_offset = input.current_token_start();
 
-    let general_text = repeat_till(
+    let general_text: String = repeat_till(
         0..,
         any,
         alt((eof.map(|_| ()), peek(separator).map(|_| ()))),
@@ -117,6 +117,8 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
     .context("general text".label())
     .map(|(s, _)| s)
     .parse_next(input)?;
+
+    let general_text = general_text.trim().to_string();
 
     Ok(Node {
         file,

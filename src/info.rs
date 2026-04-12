@@ -1,21 +1,17 @@
-use winnow::{LocatingSlice, Parser};
-
 mod parse;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Manual(NonsplitInfoFile);
+use std::fs;
 
-impl Manual {
-    pub fn nodes(&self) -> impl Iterator<Item = &Node> {
-        self.0.nodes.iter()
-    }
-}
+use winnow::{LocatingSlice, Parser};
+
+use crate::Manual;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub fn parse_nonsplit_manual(input: &str) -> anyhow::Result<Manual> {
+pub fn parse_nonsplit_manual(path: &str) -> anyhow::Result<Manual> {
+    let content = fs::read_to_string(path)?;
     parse::nonsplit_info_file
-        .parse(LocatingSlice::new(input))
-        .map(Manual)
+        .parse(LocatingSlice::new(&content))
+        .map(|n| n.into_manual(path.to_string()))
         .map_err(|e| anyhow::format_err!("{e}"))
 }
 
@@ -25,6 +21,19 @@ pub struct NonsplitInfoFile {
     nodes: Vec<Node>,
     tag_table: Option<TagTable>,
     local_variables: Option<LocalVariables>,
+}
+
+impl NonsplitInfoFile {
+    fn into_manual(self, title: String) -> Manual {
+        Manual::new(
+            title,
+            self.nodes
+                .into_iter()
+                .map(|n| n.general_text)
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,12 +65,6 @@ pub struct Node {
     general_text: String,
     /// Offset (in bytes) at which `general_text` starts within the file
     text_offset: usize,
-}
-
-impl Node {
-    pub fn text(&self) -> &str {
-        &self.general_text
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
