@@ -3,6 +3,7 @@ pub mod parse;
 use std::fs;
 
 use winnow::{LocatingSlice, Parser};
+use yansi::Paint;
 
 use crate::Manual;
 
@@ -30,34 +31,42 @@ impl NonsplitInfoFile {
             self.nodes
                 .iter()
                 .flat_map(|n| &n.general_text)
-                .map(|b| match &b.content {
-                    TextBlockContent::Paragraph(paragraph) => paragraph.lines.join("\n"),
-                    TextBlockContent::Menu(menu) => menu
-                        .items
-                        .iter()
-                        .map(|i| match i {
-                            MenuItem::Entry(entry) => {
-                                format!(
-                                    "{}::\t\t{}{}",
-                                    entry.id.nodename.as_ref().unwrap_or(&"".to_string()),
-                                    entry.description.join(" "),
-                                    "\n".repeat(entry.trailing_newlines)
-                                )
-                            }
-                            MenuItem::Comment(comment) => format!(
-                                "{}{}",
-                                &comment.lines.join(" "),
-                                "\n".repeat(comment.trailing_newlines)
-                            ),
-                        })
-                        .fold(String::new(), |mut s, it| {
-                            s.push_str(&it);
-                            s
-                        }),
-                    TextBlockContent::Printindex(_printindex) => todo!(),
+                .map(|b| {
+                    let mut s = match &b.content {
+                        TextBlockContent::Paragraph(paragraph) => {
+                            let mut p = paragraph.lines.join("\n");
+                            p.push('\n');
+                            p.push('\n');
+                            p
+                        }
+                        TextBlockContent::Menu(menu) => menu
+                            .items
+                            .iter()
+                            .map(|i| match i {
+                                MenuItem::Entry(entry) => {
+                                    format!(
+                                        "  {}\t\t{}{}",
+                                        entry.id.nodename.clone().unwrap_or("".into()).underline(),
+                                        entry.description.join(" ").italic(),
+                                        "\n".repeat(entry.trailing_newlines + 1)
+                                    )
+                                }
+                                MenuItem::Comment(comment) => format!(
+                                    "  {}{}",
+                                    &comment.lines.join(" "),
+                                    "\n".repeat(comment.trailing_newlines + 1)
+                                ),
+                            })
+                            .fold("* Menu:\n".to_string(), |mut s, it| {
+                                s.push_str(&it);
+                                s
+                            }),
+                        TextBlockContent::Printindex(_printindex) => todo!(),
+                    };
+                    s
                 })
                 .collect::<Vec<_>>()
-                .join("\n\n"),
+                .join(""),
         )
     }
 }
