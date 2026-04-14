@@ -3,8 +3,8 @@
 a manual reader
 
 > [!NOTE]
-> This program is _extremely_ unstable. It can successfully read the `gcc` info page, but that is
-> the extend to which it is currently tested.
+> This program is _extremely_ unstable. It can successfully (as in not panic) read the `gcc` info
+> page, but that is the extend to which it is currently tested on "real-world" pages.
 
 ## Motivation
 
