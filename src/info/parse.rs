@@ -153,7 +153,7 @@ fn text_block(input: &mut Stream<'_>) -> Result<TextBlock> {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Menu.html
 fn menu(input: &mut Stream<'_>) -> Result<Menu> {
-    let _directive = ("* Menu:", repeat::<_, _, (), _, _>(1.., newline))
+    ("* Menu:", repeat::<_, _, (), _, _>(1.., newline))
         .void()
         .parse_next(input)?;
     _ = multispace0(input)?;

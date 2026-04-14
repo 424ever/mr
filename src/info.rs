@@ -32,7 +32,8 @@ impl NonsplitInfoFile {
                 .iter()
                 .flat_map(|n| &n.general_text)
                 .map(|b| {
-                    let mut s = match &b.content {
+                    
+                    match &b.content {
                         TextBlockContent::Paragraph(paragraph) => {
                             let mut p = paragraph.lines.join("\n");
                             p.push('\n');
@@ -62,8 +63,7 @@ impl NonsplitInfoFile {
                                 s
                             }),
                         TextBlockContent::Printindex(_printindex) => todo!(),
-                    };
-                    s
+                    }
                 })
                 .collect::<Vec<_>>()
                 .join(""),
