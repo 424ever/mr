@@ -5,13 +5,15 @@ use crate::{
 };
 use winnow::{
     LocatingSlice, Parser, Result,
-    ascii::{self, line_ending, multispace0, newline, space0, space1, till_line_ending},
+    ascii::{
+        self, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
+    },
     combinator::{
         alt, delimited, dispatch, fail, not, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
     },
     error::{ContextError, StrContext},
-    stream::Location,
+    stream::{Location, Offset},
     token::{any, literal, take_till, take_until},
 };
 
@@ -263,7 +265,7 @@ fn menu_comment(input: &mut Stream<'_>) -> Result<MenuComment> {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Printindex.html
 fn printindex(input: &mut Stream<'_>) -> Result<Printindex> {
-    let _directive = (
+    (
         null,
         backspace,
         literal("[index"),
@@ -273,7 +275,58 @@ fn printindex(input: &mut Stream<'_>) -> Result<Printindex> {
     )
         .parse_next(input)?;
 
-    todo!()
+    Ok(Printindex {
+        entries: repeat(0.., terminated(index_entry, newline)).parse_next(input)?,
+    })
+}
+
+// https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Printindex.html
+fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
+    use winnow::stream::Stream as _;
+    fn text_and_spec(line: &str) -> Result<(String, String)> {
+        let (text, node_spec) = line.rsplit_once(':').ok_or(ContextError::new())?;
+        Ok((text.trim().to_string(), node_spec.trim().to_string()))
+    }
+
+    _ = "* ".parse_next(input)?;
+
+    let first_newline = input
+        .offset_for(|c| c == '\n')
+        .unwrap_or(input.eof_offset());
+    let first_line = input.peek_slice(first_newline).trim_end();
+
+    let (text, node_spec) = match first_line.chars().last() {
+        Some('.') => {
+            // The first line only contains <entry text> and <node spec>
+            //
+            // Start at the next line for <line spec>
+            text_and_spec(input.next_slice(first_newline - 1))?
+        }
+        Some(')') => {
+            // The entire entry is on one line
+            //
+            // Start in this line after the '.' for <line_spec>
+            let (_until_end_of_spec, rest) =
+                first_line.rsplit_once('.').ok_or(ContextError::new())?;
+
+            text_and_spec(input.next_slice(rest.offset_from(input.as_ref()) - 1))?
+        }
+        Some(_) => return Err(ContextError::new()),
+        None => return Err(ContextError::new()),
+    };
+
+    let line_spec = preceded(
+        ('.', multispace1),
+        delimited('(', take_until(1.., ')'), ')'),
+    )
+    .parse_next(input)?
+    .to_string();
+
+    Ok(IndexEntry {
+        text,
+        node_spec,
+        line_spec,
+    })
 }
 
 fn paragraph(input: &mut Stream<'_>) -> Result<Paragraph> {
