@@ -38,35 +38,53 @@ impl NonsplitInfoFile {
                         p.push('\n');
                         p
                     }
-                    TextBlockContent::Menu(menu) => menu
-                        .items
-                        .iter()
-                        .map(|i| match i {
-                            MenuItem::Entry(entry) => {
-                                // TODO: labels
-                                format!(
-                                    "  {}\t\t{}{}",
-                                    entry.id.nodename.clone().unwrap_or("".into()).underline(),
-                                    entry.description.join(" ").italic(),
-                                    "\n".repeat(entry.trailing_newlines + 1)
-                                )
-                            }
-                            MenuItem::Comment(comment) => format!(
-                                "  {}{}",
-                                &comment.lines.join(" "),
-                                "\n".repeat(comment.trailing_newlines + 1)
-                            ),
-                        })
-                        .fold("* Menu:\n".to_string(), |mut s, it| {
-                            s.push_str(&it);
-                            s
-                        }),
+                    TextBlockContent::Menu(menu) => render_menu(menu),
                     TextBlockContent::Printindex(_printindex) => "".to_string(),
                 })
                 .collect::<Vec<_>>()
                 .join(""),
         )
     }
+}
+
+fn render_menu(menu: &Menu) -> String {
+    let longest_entry_nodename = menu
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            MenuItem::Entry(entry) => {
+                Some(entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0))
+            }
+            MenuItem::Comment(_comment) => None,
+        })
+        .max()
+        .unwrap_or(0);
+
+    menu.items
+        .iter()
+        .map(|i| match i {
+            MenuItem::Entry(entry) => {
+                // TODO: labels
+                let pad = longest_entry_nodename
+                    - entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0);
+                format!(
+                    "  {}{}\t{}{}",
+                    entry.id.nodename.clone().unwrap_or("".into()).underline(),
+                    " ".repeat(pad),
+                    entry.description.join(" ").italic(),
+                    "\n".repeat(entry.trailing_newlines + 1)
+                )
+            }
+            MenuItem::Comment(comment) => format!(
+                "  {}{}",
+                &comment.lines.join(" "),
+                "\n".repeat(comment.trailing_newlines + 1)
+            ),
+        })
+        .fold("* Menu:\n".to_string(), |mut s, it| {
+            s.push_str(&it);
+            s
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
