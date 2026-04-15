@@ -43,6 +43,7 @@ impl NonsplitInfoFile {
                         .iter()
                         .map(|i| match i {
                             MenuItem::Entry(entry) => {
+                                // TODO: labels
                                 format!(
                                     "  {}\t\t{}{}",
                                     entry.id.nodename.clone().unwrap_or("".into()).underline(),

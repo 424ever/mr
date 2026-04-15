@@ -296,6 +296,7 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
     let first_line = input.peek_slice(first_newline).trim_end();
 
     let (text, node_spec) = match first_line.chars().last() {
+        // TODO: handle DELETE characters
         Some('.') => {
             // The first line only contains <entry text> and <node spec>
             //
