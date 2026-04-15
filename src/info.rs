@@ -39,12 +39,41 @@ impl NonsplitInfoFile {
                         p
                     }
                     TextBlockContent::Menu(menu) => render_menu(menu),
-                    TextBlockContent::Printindex(_printindex) => "".to_string(),
+                    TextBlockContent::Printindex(printindex) => render_index(printindex),
                 })
                 .collect::<Vec<_>>()
                 .join(""),
         )
     }
+}
+
+fn render_index(index: &Printindex) -> String {
+    let longest_text = index
+        .entries
+        .iter()
+        .map(|e| e.text.len())
+        .max()
+        .unwrap_or(0);
+
+    let mut s = index
+        .entries
+        .iter()
+        .map(|e| {
+            let pad = longest_text - e.text.len();
+            format!(
+                "  {}: {}{} (line {})\n",
+                e.text,
+                " ".repeat(pad),
+                e.node_spec.underline(),
+                e.line
+            )
+        })
+        .fold("* Index:\n".to_string(), |mut s, it| {
+            s.push_str(&it);
+            s
+        });
+    s.push('\n');
+    s
 }
 
 fn render_menu(menu: &Menu) -> String {
@@ -173,7 +202,7 @@ pub struct Printindex {
 pub struct IndexEntry {
     text: String,
     node_spec: String,
-    line_spec: String,
+    line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

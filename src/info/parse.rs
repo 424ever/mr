@@ -316,17 +316,16 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
         None => return Err(ContextError::new()),
     };
 
-    let line_spec = preceded(
+    let line = preceded(
         ('.', multispace1),
-        delimited('(', take_until(1.., ')'), ')'),
+        delimited('(', preceded(("line", multispace1), ascii::dec_uint), ')'),
     )
-    .parse_next(input)?
-    .to_string();
+    .parse_next(input)?;
 
     Ok(IndexEntry {
         text,
         node_spec,
-        line_spec,
+        line,
     })
 }
 
