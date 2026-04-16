@@ -1,3 +1,4 @@
+#![warn(rust_2018_idioms)]
 use std::{io::Cursor, thread};
 
 use clap::Parser;
@@ -19,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn show_manual(man: &Manual) -> anyhow::Result<()> {
+fn show_manual<M: Manual>(man: &M) -> anyhow::Result<()> {
     let mut buf: Vec<u8> = vec![];
 
     let mut pager = streampager::Pager::new_using_system_terminal()?;

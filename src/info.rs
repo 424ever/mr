@@ -1,6 +1,6 @@
 pub mod parse;
 
-use std::fs;
+use std::{fs, io::Write};
 
 use winnow::{LocatingSlice, Parser};
 use yansi::Paint;
@@ -8,11 +8,10 @@ use yansi::Paint;
 use crate::Manual;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub fn parse_nonsplit_manual(path: &str) -> anyhow::Result<Manual> {
+pub fn parse_nonsplit_manual(path: &str) -> anyhow::Result<NonsplitInfoFile> {
     let content = fs::read_to_string(path)?;
     parse::nonsplit_info_file
         .parse(LocatingSlice::new(&content))
-        .map(|n| n.into_manual(path.to_string()))
         .map_err(|e| anyhow::format_err!("{e}"))
 }
 
@@ -24,30 +23,46 @@ pub struct NonsplitInfoFile {
     local_variables: Option<LocalVariables>,
 }
 
-impl NonsplitInfoFile {
-    fn into_manual(self, title: String) -> Manual {
-        Manual::new(
-            title,
-            self.nodes
-                .iter()
-                .flat_map(|n| &n.general_text)
-                .map(|b| match &b.content {
+impl Manual for NonsplitInfoFile {
+    fn render<W>(&self, into: &mut W) -> anyhow::Result<()>
+    where
+        W: Write,
+    {
+        self.nodes
+            .iter()
+            .flat_map(|n| &n.general_text)
+            .map(|b| {
+                match &b.content {
                     TextBlockContent::Paragraph(paragraph) => {
+                        /*
                         let mut p = paragraph.lines.join("\n");
                         p.push('\n');
                         p.push('\n');
                         p
+                        */
+                        write!(into, "{}\n\n", paragraph.lines.join("\n"))?;
                     }
-                    TextBlockContent::Menu(menu) => render_menu(menu),
-                    TextBlockContent::Printindex(printindex) => render_index(printindex),
-                })
-                .collect::<Vec<_>>()
-                .join(""),
-        )
+                    TextBlockContent::Menu(menu) => render_menu(menu, into)?,
+                    TextBlockContent::Printindex(printindex) => render_index(printindex, into)?,
+                };
+                Ok(())
+            })
+            .collect::<anyhow::Result<()>>()?;
+
+        Ok(())
+    }
+
+    fn title(&self) -> &str {
+        self.nodes
+            .iter()
+            .next()
+            .as_ref()
+            .map(|n| n.file.as_str())
+            .unwrap_or("")
     }
 }
 
-fn render_index(index: &Printindex) -> String {
+fn render_index<W: Write>(index: &Printindex, into: &mut W) -> anyhow::Result<()> {
     let longest_text = index
         .entries
         .iter()
@@ -55,28 +70,29 @@ fn render_index(index: &Printindex) -> String {
         .max()
         .unwrap_or(0);
 
-    let mut s = index
+    write!(into, "{}", "* Index:\n".bold())?;
+    index
         .entries
         .iter()
         .map(|e| {
             let pad = longest_text - e.text.len();
-            format!(
+            write!(
+                into,
                 "  {}: {}{} (line {})\n",
                 e.text,
                 " ".repeat(pad),
                 e.node_spec.underline(),
                 e.line
-            )
+            )?;
+            Ok(())
         })
-        .fold("* Index:\n".to_string(), |mut s, it| {
-            s.push_str(&it);
-            s
-        });
-    s.push('\n');
-    s
+        .collect::<anyhow::Result<()>>()?;
+    write!(into, "\n")?;
+
+    Ok(())
 }
 
-fn render_menu(menu: &Menu) -> String {
+fn render_menu<W: Write>(menu: &Menu, into: &mut W) -> anyhow::Result<()> {
     let longest_entry_nodename = menu
         .items
         .iter()
@@ -89,31 +105,38 @@ fn render_menu(menu: &Menu) -> String {
         .max()
         .unwrap_or(0);
 
+    write!(into, "{}", "* Menu:\n".bold())?;
     menu.items
         .iter()
-        .map(|i| match i {
-            MenuItem::Entry(entry) => {
-                // TODO: labels
-                let pad = longest_entry_nodename
-                    - entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0);
-                format!(
-                    "  {}{}\t{}{}",
-                    entry.id.nodename.clone().unwrap_or("".into()).underline(),
-                    " ".repeat(pad),
-                    entry.description.join(" ").italic(),
-                    "\n".repeat(entry.trailing_newlines + 1)
-                )
-            }
-            MenuItem::Comment(comment) => format!(
-                "  {}{}",
-                &comment.lines.join(" "),
-                "\n".repeat(comment.trailing_newlines + 1)
-            ),
+        .map(|i| {
+            match i {
+                MenuItem::Entry(entry) => {
+                    // TODO: labels
+                    let pad = longest_entry_nodename
+                        - entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0);
+                    write!(
+                        into,
+                        "  {}{}\t{}{}",
+                        entry.id.nodename.clone().unwrap_or("".into()).underline(),
+                        " ".repeat(pad),
+                        entry.description.join(" ").italic(),
+                        "\n".repeat(entry.trailing_newlines + 1)
+                    )?;
+                }
+                MenuItem::Comment(comment) => {
+                    write!(
+                        into,
+                        "  {}{}",
+                        &comment.lines.join(" "),
+                        "\n".repeat(comment.trailing_newlines + 1)
+                    )?;
+                }
+            };
+            Ok(())
         })
-        .fold("* Menu:\n".to_string(), |mut s, it| {
-            s.push_str(&it);
-            s
-        })
+        .collect::<anyhow::Result<()>>()?;
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
