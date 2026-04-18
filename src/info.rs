@@ -66,6 +66,7 @@ pub enum TextBlockContent {
     Paragraph(Paragraph),
     Menu(Menu),
     Printindex(Printindex),
+    Heading(Heading),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +109,11 @@ pub struct IndexEntry {
     text: String,
     node_spec: String,
     line: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Heading {
+    text: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

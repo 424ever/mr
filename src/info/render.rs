@@ -2,7 +2,7 @@ use std::io::Write;
 
 use yansi::Paint as _;
 
-use super::{Menu, MenuItem, NonsplitInfoFile, TextBlockContent};
+use super::{Heading, Menu, MenuItem, NonsplitInfoFile, TextBlockContent};
 use crate::{Manual, info::Printindex};
 
 impl Manual for NonsplitInfoFile {
@@ -20,6 +20,7 @@ impl Manual for NonsplitInfoFile {
                     }
                     TextBlockContent::Menu(menu) => menu.render(into)?,
                     TextBlockContent::Printindex(printindex) => printindex.render(into)?,
+                    TextBlockContent::Heading(heading) => heading.render(into)?,
                 };
                 Ok(())
             })
@@ -35,6 +36,13 @@ impl Manual for NonsplitInfoFile {
             .as_ref()
             .map(|n| n.file.as_str())
             .unwrap_or("")
+    }
+}
+
+impl Heading {
+    fn render<W: Write>(&self, into: &mut W) -> anyhow::Result<()> {
+        write!(into, "{}\n\n", self.text.yellow().bold())?;
+        Ok(())
     }
 }
 

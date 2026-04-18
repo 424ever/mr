@@ -14,7 +14,7 @@ use winnow::{
     },
     error::{ContextError, StrContext},
     stream::{Location, Offset},
-    token::{any, literal, take_till, take_until},
+    token::{any, literal, one_of, take_till, take_until},
 };
 
 type Stream<'i> = LocatingSlice<&'i str>;
@@ -137,6 +137,7 @@ fn text_block(input: &mut Stream<'_>) -> Result<TextBlock> {
     let content = alt((
         printindex.map(TextBlockContent::Printindex),
         menu.map(TextBlockContent::Menu),
+        heading.map(TextBlockContent::Heading),
         paragraph.map(TextBlockContent::Paragraph),
     ))
     .parse_next(input)?;
@@ -151,6 +152,16 @@ fn text_block(input: &mut Stream<'_>) -> Result<TextBlock> {
         end_offset,
         content,
     })
+}
+
+fn heading(input: &mut Stream<'_>) -> Result<Heading> {
+    let text = terminated(till_line_ending, line_ending)
+        .parse_next(input)?
+        .to_string();
+    let ul = peek(one_of(['*', '=', '-', '.'])).parse_next(input)?;
+    repeat::<_, _, (), _, _>(text.len(), literal(ul)).parse_next(input)?;
+
+    Ok(Heading { text })
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Menu.html
