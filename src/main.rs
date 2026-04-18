@@ -1,5 +1,5 @@
 #![warn(rust_2018_idioms)]
-use std::{io::Cursor, thread};
+use std::{io::Cursor, path::PathBuf, thread};
 
 use clap::Parser;
 use mr::{Manual, info};
@@ -7,13 +7,13 @@ use mr::{Manual, info};
 #[derive(Parser)]
 struct Cli {
     /// info file to display
-    file: String,
+    file: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let manual = info::parse_nonsplit_manual(&cli.file)?;
+    let manual = info::read_nonsplit_manual(&cli.file)?;
 
     show_manual(&manual)?;
 
