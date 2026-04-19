@@ -113,7 +113,17 @@ pub struct IndexEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Heading {
+    level: HeadingLevel,
     text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeadingLevel {
+    /// title/chapter
+    Major,
+    Section,
+    SubSection,
+    SubSubSection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

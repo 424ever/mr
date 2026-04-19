@@ -1,0 +1,26 @@
+\input texinfo
+@setfilename headings.info
+@documentencoding UTF-8
+@settitle simple-document
+@titlepage
+@end titlepage
+@part Part I
+@node top
+Hello, world
+@chapter chapter
+@unnumbered unnumbered
+@appendix appendix
+@majorheading majorheading
+@chapheading chapheading
+@section section
+@unnumberedsec unnumberedsec
+@appendixsec appendixsec
+@heading heading
+@subsection subsection
+@unnumberedsubsec unnumberedsubsec
+@appendixsubsec appendixsubsec
+@subheading subheading
+@subsubsection subsubsection
+@unnumberedsubsubsec unnumberedsubsubsec
+@appendixsubsubsec appendixsubsubsec
+@subsubheading subsubheading

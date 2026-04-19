@@ -1,0 +1,69 @@
+This is headings.info, produced by texi2any version 7.2 from
+headings.texi.
+
+
+File: headings.info,  Node: Top,  Up: (dir)
+
+Hello, world
+
+1 chapter
+*********
+
+unnumbered
+**********
+
+Appendix A appendix
+*******************
+
+majorheading
+************
+
+chapheading
+***********
+
+A.1 section
+===========
+
+unnumberedsec
+=============
+
+A.2 appendixsec
+===============
+
+heading
+=======
+
+A.2.1 subsection
+----------------
+
+unnumberedsubsec
+----------------
+
+A.2.2 appendixsubsec
+--------------------
+
+subheading
+----------
+
+A.2.2.1 subsubsection
+.....................
+
+unnumberedsubsubsec
+...................
+
+A.2.2.2 appendixsubsubsec
+.........................
+
+subsubheading
+.............
+
+
+Tag Table:
+Node: Top77
+
+End Tag Table
+
+
+Local Variables:
+coding: utf-8
+End:

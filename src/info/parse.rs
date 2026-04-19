@@ -161,7 +161,16 @@ fn heading(input: &mut Stream<'_>) -> Result<Heading> {
     let ul = peek(one_of(['*', '=', '-', '.'])).parse_next(input)?;
     repeat::<_, _, (), _, _>(text.len(), literal(ul)).parse_next(input)?;
 
-    Ok(Heading { text })
+    Ok(Heading {
+        level: match ul {
+            '*' => HeadingLevel::Major,
+            '=' => HeadingLevel::Section,
+            '-' => HeadingLevel::SubSection,
+            '.' => HeadingLevel::SubSubSection,
+            _ => unreachable!(),
+        },
+        text,
+    })
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Menu.html

@@ -16,7 +16,11 @@ impl Manual for NonsplitInfoFile {
             .flat_map(|n| &n.general_text)
             .try_for_each(|b| match &b.content {
                 TextBlockContent::Paragraph(paragraph) => {
-                    write!(&mut into, "{}\n\n", paragraph.lines.join("\n"))
+                    paragraph
+                        .lines
+                        .iter()
+                        .try_for_each(|l| writeln!(&mut into, "       {}", l))?;
+                    writeln!(&mut into, "")
                 }
 
                 TextBlockContent::Menu(menu) => menu.render(&mut into),
@@ -37,7 +41,14 @@ impl Manual for NonsplitInfoFile {
 
 impl Heading {
     fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
-        write!(into, "{}\n\n", self.text.red().bold())
+        let pad = match self.level {
+            crate::info::HeadingLevel::Major => "",
+            crate::info::HeadingLevel::Section => "",
+            crate::info::HeadingLevel::SubSection => "   ",
+            crate::info::HeadingLevel::SubSubSection => "    ",
+        };
+
+        write!(into, "{}{}\n", pad, self.text.red().bold())
     }
 }
 
@@ -45,12 +56,12 @@ impl Printindex {
     fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
         let longest_text = self.entries.iter().map(|e| e.text.len()).max().unwrap_or(0);
 
-        write!(into, "{}", "* Index:\n".bold())?;
+        write!(into, "       {}", "* Index:\n".bold())?;
         self.entries.iter().try_for_each(|e| {
             let pad = longest_text - e.text.len();
             writeln!(
                 into,
-                "  {}: {}{} (line {})",
+                "         {}: {}{} (line {})",
                 e.text,
                 " ".repeat(pad),
                 e.node_spec.underline(),
@@ -77,7 +88,7 @@ impl Menu {
             .max()
             .unwrap_or(0);
 
-        write!(into, "{}", "* Menu:\n".bold())?;
+        write!(into, "       {}", "* Menu:\n".bold())?;
         self.items.iter().try_for_each(|i| {
             match i {
                 MenuItem::Entry(entry) => {
@@ -86,7 +97,7 @@ impl Menu {
                         - entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0);
                     write!(
                         into,
-                        "  {}{}\t{}{}",
+                        "         {}{}\t{}{}",
                         entry.id.nodename.clone().unwrap_or("".into()).underline(),
                         " ".repeat(pad),
                         entry.description.join(" ").italic(),
@@ -96,7 +107,7 @@ impl Menu {
                 MenuItem::Comment(comment) => {
                     write!(
                         into,
-                        "  {}{}",
+                        "         {}{}",
                         &comment.lines.join(" "),
                         "\n".repeat(comment.trailing_newlines + 1)
                     )

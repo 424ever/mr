@@ -22,6 +22,3 @@ confy = "2.0.0"
 serde = { version = "1.0.228", features = ["derive"] }
 winnow = { version = "1.0.1", features = ["parser"]}
 yansi = "1.0.1"
-
-[[example]]
-name = "no_nodes"
