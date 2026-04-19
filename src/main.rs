@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Parser;
-use mr::{Manual, config::Settings, info, pager::WriteTarget};
+use mr::{Manual, RenderOptions, config::Settings, info, pager::WriteTarget};
+use terminal_size::{Width, terminal_size};
 
 #[derive(Parser)]
 struct Cli {
@@ -26,7 +27,14 @@ fn main() -> anyhow::Result<()> {
     let manual = info::read_nonsplit_manual(&cli.file)
         .context(format!("couldn't read {}", cli.file.to_str().unwrap()))?;
 
-    manual.render(&mut output)?;
+    let opt = RenderOptions {
+        max_width: if let Some((Width(w), _)) = terminal_size() {
+            (w as usize).saturating_sub(10)
+        } else {
+            80
+        },
+    };
+    manual.render(&mut output, opt)?;
 
     output.wait()?;
 
