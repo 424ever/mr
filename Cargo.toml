@@ -9,9 +9,17 @@ license = "MIT OR Apache-2.0"
 default-run = "mr"
 repository = "https://github.com/424ever/mr.git"
 
+[lints.rust]
+rust_2018_idioms = "warn"
+
+[lints.clippy]
+mod_module_files = "deny"
+
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.6.0", features = ["derive"] }
+confy = "2.0.0"
+serde = { version = "1.0.228", features = ["derive"] }
 winnow = { version = "1.0.1", features = ["parser"]}
 yansi = "1.0.1"
 
