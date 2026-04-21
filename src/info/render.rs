@@ -132,7 +132,7 @@ impl Menu {
                         "         {}{}\t{}{}",
                         entry.id.nodename.clone().unwrap_or("".into()).underline(),
                         " ".repeat(pad),
-                        entry.description.join(" ").italic(),
+                        entry.description.join(" "),
                         "\n".repeat(entry.trailing_newlines + 1)
                     )
                 }
