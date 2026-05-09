@@ -464,11 +464,7 @@ fn indirect_entry(_input: &mut Stream<'_>) -> Result<IndirectEntry> {
 mod tests {
     use winnow::{LocatingSlice, Parser as _, combinator::repeat};
 
-    use super::node;
-    use crate::info::{
-        Id, Menu, MenuComment, MenuEntry, MenuItem, Node, Paragraph, TextBlock, TextBlockContent,
-        parse::{menu, text_block},
-    };
+    use super::*;
 
     #[test]
     fn node_with_menu() {
@@ -489,8 +485,9 @@ mod tests {
                 TextBlock {
                     start_offset: 0,
                     end_offset: 17,
-                    content: TextBlockContent::Paragraph(Paragraph {
-                        lines: vec!["Heading".into(), "*******".into()]
+                    content: TextBlockContent::Heading(Heading {
+                        level: HeadingLevel::Major,
+                        text: "Heading".to_string()
                     })
                 },
                 TextBlock {
