@@ -1,6 +1,11 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    iter::Peekable,
+};
 
 use anyhow::Context as _;
+use itertools::Itertools as _;
+use unicode_segmentation::UnicodeSegmentation as _;
 use yansi::Paint as _;
 
 use super::{Heading, Menu, MenuItem, NonsplitInfoFile, TextBlockContent};
@@ -42,28 +47,90 @@ impl Paragraph {
                 .iter()
                 .try_for_each(|l| writeln!(&mut into, "       {}", l))?;
         } else {
-            let allowed = opt.max_width.saturating_sub(7);
-            let mut curr_width = 0;
-
-            write!(&mut into, "       ")?;
-            for word in self.lines.iter().flat_map(|l| l.split_whitespace()) {
-                let len = word.chars().count();
-
-                if (curr_width + len) > allowed {
-                    if curr_width > 0 {
-                        write!(&mut into, "\n       {} ", word)?;
-                        curr_width = len + 1;
-                    } else {
-                        write!(&mut into, "{}\n       ", word)?;
-                        curr_width = 0;
-                    }
-                } else {
-                    write!(&mut into, "{} ", word)?;
-                    curr_width += len + 1;
-                }
-            }
+            self.render_reflow(&mut into, opt)?;
         }
-        writeln!(&mut into, "\n")
+        writeln!(&mut into)?;
+        Ok(())
+    }
+
+    fn render_reflow(&self, mut into: impl Write, opt: &RenderOptions) -> io::Result<()> {
+        let allowed = opt.max_width.saturating_sub(7);
+        let mut words = self
+            .lines
+            .iter()
+            .flat_map(|l| l.split_whitespace())
+            .peekable();
+
+        while let Some(words_for_line) = Self::words_for_next_line(&mut words, allowed) {
+            let line = if words.peek().is_some() {
+                Self::line_padded_to(words_for_line, allowed)
+            } else {
+                // only single spaces for the last line in the paragraph
+                words_for_line.join(" ")
+            };
+
+            writeln!(&mut into, "       {}", line)?;
+        }
+
+        Ok(())
+    }
+
+    fn words_for_next_line<S, I>(words: &mut Peekable<I>, allowed: usize) -> Option<Vec<S>>
+    where
+        S: AsRef<str>,
+        I: Iterator<Item = S>,
+    {
+        words.peek()?;
+
+        let mut len_sum = 0;
+        Some(
+            words
+                .peeking_take_while(move |w| {
+                    let wl = w.as_ref().graphemes(true).count();
+                    if len_sum == 0 {
+                        len_sum = wl;
+                        true
+                    } else {
+                        let len_with_word = len_sum + wl + 1;
+                        if len_with_word <= allowed {
+                            len_sum = len_with_word;
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    fn line_padded_to(words: Vec<&str>, pad_to: usize) -> String {
+        assert!(!words.is_empty());
+
+        if words.len() == 1 {
+            return words[0].to_string();
+        }
+
+        let total_chars: usize = words.iter().map(|w| w.graphemes(true).count()).sum();
+        let gaps = words.len() - 1;
+        assert!(total_chars + gaps <= pad_to);
+        let total_spaces = pad_to - total_chars;
+
+        let spaces_in_every_gap = " ".repeat(total_spaces / gaps);
+        let mut remaining_gaps_with_extra_space = total_spaces % gaps;
+
+        let mut res = String::with_capacity(pad_to);
+        res.push_str(words[0]);
+        for w in &words[1..] {
+            if remaining_gaps_with_extra_space > 0 {
+                remaining_gaps_with_extra_space -= 1;
+                res.push(' ');
+            }
+            res.push_str(&spaces_in_every_gap);
+            res.push_str(w)
+        }
+
+        res
     }
 
     fn print_raw(&self) -> bool {
@@ -73,14 +140,7 @@ impl Paragraph {
 
 impl Heading {
     fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
-        let pad = match self.level {
-            crate::info::HeadingLevel::Major => "",
-            crate::info::HeadingLevel::Section => "",
-            crate::info::HeadingLevel::SubSection => "   ",
-            crate::info::HeadingLevel::SubSubSection => "    ",
-        };
-
-        writeln!(into, "{}{}", pad, self.text.red().bold())
+        writeln!(into, "{}", self.text.red().bold())
     }
 }
 

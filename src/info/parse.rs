@@ -4,20 +4,20 @@ use crate::{
     parser_util::{StrContextExt, count, take_until_and_consume},
 };
 use winnow::{
-    LocatingSlice, Parser, Result,
     ascii::{
-        self, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
+        dec_uint, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
     },
     combinator::{
         alt, delimited, dispatch, fail, not, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
     },
     error::{ContextError, StrContext},
-    stream::{Location, Offset},
+    stream::{Location, Offset as _},
     token::{any, literal, one_of, take_till, take_until},
 };
 
 type Stream<'i> = LocatingSlice<&'i str>;
+type Result<T> = winnow::Result<T>;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 // TODO: support optional form feeds
@@ -338,7 +338,7 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
 
     let line = preceded(
         ('.', multispace1),
-        delimited('(', preceded(("line", multispace1), ascii::dec_uint), ')'),
+        delimited('(', preceded(("line", multispace1), dec_uint), ')'),
     )
     .parse_next(input)?;
 
@@ -429,7 +429,7 @@ fn tag_table_entry(input: &mut Stream<'_>) -> Result<TagTableEntry> {
 fn tag(input: &mut Stream<'_>) -> Result<Tag> {
     seq! {Tag{
         nodeid: repeat_till(1.., any, delete).map(|(s,_): (String,_)| s).context(StrContext::Expected("nodeid".into())),
-        bytepos: ascii::dec_uint.context(StrContext::Expected("bytepos".into())),
+        bytepos: dec_uint.context(StrContext::Expected("bytepos".into())),
     }}
     .parse_next(input)
 }

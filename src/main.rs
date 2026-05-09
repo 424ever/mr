@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
 
     let opt = RenderOptions {
         max_width: if let Some((Width(w), _)) = terminal_size() {
-            (w as usize).saturating_sub(10)
+            (w as usize).saturating_sub(1)
         } else {
             80
         },
