@@ -18,10 +18,11 @@ mod_module_files = "deny"
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.6.0", features = ["derive"] }
-confy = "2.0.0"
 itertools = "0.14.0"
 serde = { version = "1.0.228", features = ["derive"] }
 terminal_size = "0.4.4"
+toml_edit = { version = "0.25.11", features = ["serde"] }
 unicode-segmentation = "1.13.2"
 winnow = { version = "1.0.1", features = ["parser"]}
+xdg = "3.0.0"
 yansi = "1.0.1"

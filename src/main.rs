@@ -1,4 +1,7 @@
-use std::{io, path::PathBuf};
+use std::{
+    io::{self},
+    path::PathBuf,
+};
 
 use anyhow::Context;
 use clap::Parser;
@@ -16,7 +19,7 @@ struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let config: Settings = confy::load("mr", None)?;
+    let config: Settings = Settings::load()?;
 
     let mut output = match (cli.no_pager, config.ui.pager) {
         (true, _) => WriteTarget::new_unpaged(),
