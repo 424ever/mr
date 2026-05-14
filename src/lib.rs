@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{self, Write};
 
 pub mod config;
 mod control;
@@ -11,7 +11,7 @@ pub struct RenderOptions {
 }
 
 pub trait Manual {
-    fn render<W>(&self, into: W, opt: RenderOptions) -> anyhow::Result<()>
+    fn render<W>(&self, into: W, opt: RenderOptions) -> io::Result<()>
     where
         W: Write;
 

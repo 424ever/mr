@@ -3,7 +3,6 @@ use std::{
     iter::Peekable,
 };
 
-use anyhow::Context as _;
 use itertools::Itertools as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 use yansi::Paint as _;
@@ -15,7 +14,7 @@ use crate::{
 };
 
 impl Manual for NonsplitInfoFile {
-    fn render<W>(&self, mut into: W, opt: RenderOptions) -> anyhow::Result<()>
+    fn render<W>(&self, mut into: W, opt: RenderOptions) -> io::Result<()>
     where
         W: Write,
     {
@@ -28,7 +27,6 @@ impl Manual for NonsplitInfoFile {
                 TextBlockContent::Printindex(printindex) => printindex.render(&mut into),
                 TextBlockContent::Heading(heading) => heading.render(&mut into),
             })
-            .context("write")
     }
 
     fn title(&self) -> &str {

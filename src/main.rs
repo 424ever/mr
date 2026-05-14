@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
 use anyhow::Context;
 use clap::Parser;
@@ -34,7 +34,11 @@ fn main() -> anyhow::Result<()> {
             80
         },
     };
-    manual.render(&mut output, opt)?;
+    match manual.render(&mut output, opt) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(e),
+    }?;
 
     output.wait()?;
 
