@@ -12,13 +12,13 @@ use winnow::{
         alt, delimited, dispatch, fail, not, opt, peek, preceded, repeat, repeat_till, seq,
         terminated,
     },
-    error::{ContextError, StrContext},
+    error::{ContextError, ErrMode, StrContext},
     stream::{Location, Offset as _},
     token::{any, literal, one_of, take_till, take_until},
 };
 
 type Stream<'i> = LocatingSlice<&'i str>;
-type Result<T> = winnow::Result<T>;
+type Result<T> = winnow::ModalResult<T>;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 // TODO: support optional form feeds
@@ -26,14 +26,17 @@ const SEPARATOR: &str = "\x1f\x0a";
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 pub fn nonsplit_info_file(input: &mut Stream<'_>) -> Result<NonsplitInfoFile> {
-    seq! {NonsplitInfoFile {
-        preamble: preamble,
-        nodes: repeat(0.., node),
-        tag_table: opt(tag_table),
-        local_variables: opt(local_variables),
-    }}
-    .context("non-split info file".label())
-    .parse_next(input)
+    let preamble = preamble.parse_next(input)?;
+    let nodes = repeat(1.., node.context("node".label())).parse_next(input)?;
+    let tag_table = opt(tag_table).parse_next(input)?;
+    let local_variables = opt(local_variables).parse_next(input)?;
+
+    Ok(NonsplitInfoFile {
+        preamble,
+        nodes,
+        tag_table,
+        local_variables,
+    })
 }
 
 #[expect(dead_code)]
@@ -71,6 +74,7 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
     let invalid_id_chars = &[','];
 
     _ = SEPARATOR
+        .context("node start".label())
         .context("separator".expected())
         .parse_next(input)?;
     _ = ("File:", space1)
@@ -84,13 +88,14 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
     _ = ("Node:", space1)
         .context("node name text".expected())
         .parse_next(input)?;
-    let node = id(invalid_id_chars)
+    let node = id(&[','])
         .context("node name id".expected())
         .parse_next(input)?;
     _ = (
         ",".context("comma".expected()),
         space1.context("whitespace".expected()),
     )
+        .context("space after node name".label())
         .parse_next(input)?;
     let next = opt(delimited(
         (
@@ -294,6 +299,7 @@ fn printindex(input: &mut Stream<'_>) -> Result<Printindex> {
         backspace,
         literal("]\n* Menu:\n\n"),
     )
+        .map_err(ErrMode::Backtrack)
         .parse_next(input)?;
 
     Ok(Printindex {
@@ -305,7 +311,9 @@ fn printindex(input: &mut Stream<'_>) -> Result<Printindex> {
 fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
     use winnow::stream::Stream as _;
     fn text_and_spec(line: &str) -> Result<(String, String)> {
-        let (text, node_spec) = line.rsplit_once(':').ok_or(ContextError::new())?;
+        let (text, node_spec) = line
+            .rsplit_once(':')
+            .ok_or(ErrMode::Backtrack(ContextError::new()))?;
         Ok((text.trim().to_string(), node_spec.trim().to_string()))
     }
 
@@ -328,13 +336,14 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
             // The entire entry is on one line
             //
             // Start in this line after the '.' for <line_spec>
-            let (_until_end_of_spec, rest) =
-                first_line.rsplit_once('.').ok_or(ContextError::new())?;
+            let (_until_end_of_spec, rest) = first_line
+                .rsplit_once('.')
+                .ok_or(ErrMode::Backtrack(ContextError::new()))?;
 
             text_and_spec(input.next_slice(rest.offset_from(input.as_ref()) - 1))?
         }
-        Some(_) => return Err(ContextError::new()),
-        None => return Err(ContextError::new()),
+        Some(_) => return Err(ErrMode::Backtrack(ContextError::new())),
+        None => return Err(ErrMode::Backtrack(ContextError::new())),
     };
 
     let line = preceded(
@@ -367,12 +376,13 @@ fn paragraph(input: &mut Stream<'_>) -> Result<Paragraph> {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
-fn id(invalid_id_chars: &[char]) -> impl Parser<Stream<'_>, Id, ContextError> {
+fn id(invalid_id_chars: &[char]) -> impl Parser<Stream<'_>, Id, ErrMode<ContextError>> {
     seq! {Id{
         infofile: opt(delimited('(', take_until(1.., ')').map(|s:&str| s.to_string()), ')')).context("infofile".expected()),
         nodename: opt(node_spec(invalid_id_chars)).context("node spec".expected()),
     }}
     .context("node id".label())
+    .map_err(ErrMode::Backtrack)
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
@@ -433,6 +443,7 @@ fn tag(input: &mut Stream<'_>) -> Result<Tag> {
         bytepos: dec_uint.context(StrContext::Expected("bytepos".into())),
     }}
     .parse_next(input)
+    .map_err(ErrMode::Backtrack)
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Local-Variables.html

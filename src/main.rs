@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let manual = info::read_nonsplit_manual(&cli.file)
-        .context(format!("couldn't read {}", cli.file.to_str().unwrap()))?;
+        .context(format!("parsing {} failed", cli.file.to_str().unwrap()))?;
 
     let opt = RenderOptions {
         max_width: if let Some((Width(w), _)) = terminal_size() {
