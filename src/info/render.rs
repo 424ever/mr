@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{self, Write},
     iter::Peekable,
 };
@@ -10,23 +11,19 @@ use yansi::Paint as _;
 use super::{Heading, Menu, MenuItem, NonsplitInfoFile, TextBlockContent};
 use crate::{
     Manual, RenderOptions,
-    info::{Paragraph, Printindex},
+    info::{Id, Node, Paragraph, Printindex},
 };
 
+const MAX_REF_DIGITS: usize = 5;
+
 impl Manual for NonsplitInfoFile {
-    fn render<W>(&self, mut into: W, opt: RenderOptions) -> io::Result<()>
+    fn render<W>(&self, into: W, opt: RenderOptions) -> io::Result<()>
     where
         W: Write,
     {
-        self.nodes
-            .iter()
-            .flat_map(|n| &n.general_text)
-            .try_for_each(|b| match &b.content {
-                TextBlockContent::Paragraph(paragraph) => paragraph.render(&mut into, &opt),
-                TextBlockContent::Menu(menu) => menu.render(&mut into),
-                TextBlockContent::Printindex(printindex) => printindex.render(&mut into),
-                TextBlockContent::Heading(heading) => heading.render(&mut into),
-            })
+        let node_lines = self.resolve_node_begin_lines(&opt)?;
+
+        self.render_nodes(into, &opt, &node_lines, |_, _| {})
     }
 
     fn title(&self) -> &str {
@@ -35,6 +32,49 @@ impl Manual for NonsplitInfoFile {
             .as_ref()
             .map(|n| n.file.as_str())
             .unwrap_or("")
+    }
+}
+
+impl NonsplitInfoFile {
+    fn render_nodes<F: FnMut(&Id, &W), W: Write>(
+        &self,
+        mut into: W,
+        opt: &RenderOptions,
+        node_lines: &HashMap<Id, usize>,
+        mut before_render: F,
+    ) -> io::Result<()> {
+        self.nodes.iter().try_for_each(|n| {
+            before_render(&n.node, &into);
+            n.render(&mut into, opt, node_lines)
+        })
+    }
+
+    fn resolve_node_begin_lines(&self, opt: &RenderOptions) -> io::Result<HashMap<Id, usize>> {
+        let mut w = CountNewlines::new();
+        let mut map = HashMap::new();
+        let fake = HashMap::new();
+
+        self.render_nodes(&mut w, opt, &fake, |id, w| {
+            map.insert(id.clone(), w.count() + 1);
+        })?;
+
+        Ok(map)
+    }
+}
+
+impl Node {
+    fn render<W: Write>(
+        &self,
+        mut into: W,
+        opt: &RenderOptions,
+        node_lines: &HashMap<Id, usize>,
+    ) -> io::Result<()> {
+        self.general_text.iter().try_for_each(|b| match &b.content {
+            TextBlockContent::Paragraph(paragraph) => paragraph.render(&mut into, opt),
+            TextBlockContent::Menu(menu) => menu.render(&mut into, node_lines),
+            TextBlockContent::Printindex(printindex) => printindex.render(&mut into, node_lines),
+            TextBlockContent::Heading(heading) => heading.render(&mut into),
+        })
     }
 }
 
@@ -143,19 +183,28 @@ impl Heading {
 }
 
 impl Printindex {
-    fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
-        let longest_text = self.entries.iter().map(|e| e.text.len()).max().unwrap_or(0);
+    fn render<W: Write>(&self, mut into: W, node_lines: &HashMap<Id, usize>) -> io::Result<()> {
+        let longest_text = self
+            .entries
+            .iter()
+            .map(|e| e.text.graphemes(true).count())
+            .max()
+            .unwrap_or(0);
 
         write!(into, "       {}", "* Index:\n".bold())?;
         self.entries.iter().try_for_each(|e| {
-            let pad = longest_text - e.text.len();
             writeln!(
                 into,
-                "         {}: {}{} (line {})",
+                "         {:textlen$}\t{}",
                 e.text,
-                " ".repeat(pad),
-                e.node_spec.underline(),
-                e.line
+                render_id(
+                    &Id {
+                        infofile: None,
+                        nodename: Some(e.node_spec.clone())
+                    },
+                    node_lines
+                ),
+                textlen = longest_text
             )
         })?;
         writeln!(into)?;
@@ -165,13 +214,13 @@ impl Printindex {
 }
 
 impl Menu {
-    fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
+    fn render<W: Write>(&self, mut into: W, node_lines: &HashMap<Id, usize>) -> io::Result<()> {
         let longest_entry_nodename = self
             .items
             .iter()
             .filter_map(|i| match i {
                 MenuItem::Entry(entry) => {
-                    Some(entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0))
+                    Some(render_id(&entry.id, node_lines).graphemes(true).count())
                 }
                 MenuItem::Comment(_comment) => None,
             })
@@ -183,15 +232,13 @@ impl Menu {
             match i {
                 MenuItem::Entry(entry) => {
                     // TODO: labels
-                    let pad = longest_entry_nodename
-                        - entry.id.nodename.as_ref().map(|n| n.len()).unwrap_or(0);
                     write!(
                         into,
-                        "         {}{}\t{}{}",
-                        entry.id.nodename.clone().unwrap_or("".into()).underline(),
-                        " ".repeat(pad),
+                        "         {:namelen$}\t{}{}",
+                        render_id(&entry.id, node_lines),
                         entry.description.join(" "),
-                        "\n".repeat(entry.trailing_newlines + 1)
+                        "\n".repeat(entry.trailing_newlines + 1),
+                        namelen = longest_entry_nodename
                     )
                 }
                 MenuItem::Comment(comment) => {
@@ -204,5 +251,45 @@ impl Menu {
                 }
             }
         })
+    }
+}
+
+fn node_ref(map: &HashMap<Id, usize>, id: &Id) -> String {
+    match map.get(id) {
+        Some(line) => format!("{}G", line),
+        None => "?".repeat(MAX_REF_DIGITS + 1),
+    }
+}
+
+fn render_id(node: &Id, node_lines: &HashMap<Id, usize>) -> String {
+    format!(
+        "{} ({})",
+        node.nodename.clone().unwrap_or("".into()),
+        node_ref(node_lines, node).bold().blue()
+    )
+}
+
+struct CountNewlines {
+    count: usize,
+}
+
+impl CountNewlines {
+    fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+}
+
+impl Write for CountNewlines {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.count += buf.iter().filter(|&c| *c == b'\n').count();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }

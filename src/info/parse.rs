@@ -3,6 +3,7 @@ use crate::{
     control::{DELETE, backspace, delete, null},
     parser_util::{StrContextExt, count, take_until_and_consume},
 };
+use unicode_segmentation::UnicodeSegmentation;
 use winnow::{
     ascii::{
         dec_uint, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
@@ -159,7 +160,7 @@ fn heading(input: &mut Stream<'_>) -> Result<Heading> {
         .parse_next(input)?
         .to_string();
     let ul = peek(one_of(['*', '=', '-', '.'])).parse_next(input)?;
-    repeat::<_, _, (), _, _>(text.len(), literal(ul)).parse_next(input)?;
+    repeat::<_, _, (), _, _>(text.graphemes(true).count(), literal(ul)).parse_next(input)?;
 
     Ok(Heading {
         level: match ul {

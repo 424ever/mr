@@ -126,7 +126,7 @@ pub enum HeadingLevel {
     SubSubSection,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Id {
     infofile: Option<String>,
     nodename: Option<String>,
