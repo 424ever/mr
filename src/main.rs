@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context;
 use clap::Parser;
 use mr::{Manual, RenderOptions, config::Settings, info, pager::WriteTarget};
-use terminal_size::{Width, terminal_size};
+use terminal_size::terminal_size;
 
 #[derive(Parser)]
 struct Cli {
@@ -30,13 +30,12 @@ fn main() -> anyhow::Result<()> {
     let manual = info::read_nonsplit_manual(&cli.file)
         .context(format!("parsing {} failed", cli.file.to_str().unwrap()))?;
 
-    let opt = RenderOptions {
-        max_width: if let Some((Width(w), _)) = terminal_size() {
-            (w as usize).saturating_sub(1)
-        } else {
-            80
-        },
+    let opt = if let Some(dim) = terminal_size() {
+        RenderOptions::new_for_terminal(dim)
+    } else {
+        RenderOptions::new()
     };
+
     match manual.render(&mut output, opt) {
         Ok(_) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),

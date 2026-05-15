@@ -1,17 +1,23 @@
+mod heading;
+mod index;
+mod menu;
+mod node;
+mod paragraph;
+
 use std::{
     collections::HashMap,
+    fmt::Display,
     io::{self, Write},
     iter::Peekable,
 };
 
+use glyphs::{Color, style};
 use itertools::Itertools as _;
 use unicode_segmentation::UnicodeSegmentation as _;
-use yansi::Paint as _;
 
-use super::{Heading, Menu, MenuItem, NonsplitInfoFile, TextBlockContent};
 use crate::{
     Manual, RenderOptions,
-    info::{Id, Node, Paragraph, Printindex},
+    info::{Id, NonsplitInfoFile},
 };
 
 const MAX_REF_DIGITS: usize = 5;
@@ -21,9 +27,9 @@ impl Manual for NonsplitInfoFile {
     where
         W: Write,
     {
-        let node_lines = self.resolve_node_begin_lines(&opt)?;
+        let node_lines = self.resolve_node_begin_lines(opt)?;
 
-        self.render_nodes(into, &opt, &node_lines, |_, _| {})
+        self.render_nodes(into, opt, &node_lines, |_, _| {})
     }
 
     fn title(&self) -> &str {
@@ -39,7 +45,7 @@ impl NonsplitInfoFile {
     fn render_nodes<F: FnMut(&Id, &W), W: Write>(
         &self,
         mut into: W,
-        opt: &RenderOptions,
+        opt: RenderOptions,
         node_lines: &HashMap<Id, usize>,
         mut before_render: F,
     ) -> io::Result<()> {
@@ -49,7 +55,7 @@ impl NonsplitInfoFile {
         })
     }
 
-    fn resolve_node_begin_lines(&self, opt: &RenderOptions) -> io::Result<HashMap<Id, usize>> {
+    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> io::Result<HashMap<Id, usize>> {
         let mut w = CountNewlines::new();
         let mut map = HashMap::new();
         let fake = HashMap::new();
@@ -59,198 +65,6 @@ impl NonsplitInfoFile {
         })?;
 
         Ok(map)
-    }
-}
-
-impl Node {
-    fn render<W: Write>(
-        &self,
-        mut into: W,
-        opt: &RenderOptions,
-        node_lines: &HashMap<Id, usize>,
-    ) -> io::Result<()> {
-        self.general_text.iter().try_for_each(|b| match &b.content {
-            TextBlockContent::Paragraph(paragraph) => paragraph.render(&mut into, opt),
-            TextBlockContent::Menu(menu) => menu.render(&mut into, node_lines),
-            TextBlockContent::Printindex(printindex) => printindex.render(&mut into, node_lines),
-            TextBlockContent::Heading(heading) => heading.render(&mut into),
-        })
-    }
-}
-
-impl Paragraph {
-    fn render<W: Write>(&self, mut into: W, opt: &RenderOptions) -> io::Result<()> {
-        if self.print_raw() {
-            self.lines
-                .iter()
-                .try_for_each(|l| writeln!(&mut into, "       {}", l))?;
-        } else {
-            self.render_reflow(&mut into, opt)?;
-        }
-        writeln!(&mut into)?;
-        Ok(())
-    }
-
-    fn render_reflow(&self, mut into: impl Write, opt: &RenderOptions) -> io::Result<()> {
-        let allowed = opt.max_width.saturating_sub(7);
-        let mut words = self
-            .lines
-            .iter()
-            .flat_map(|l| l.split_whitespace())
-            .peekable();
-
-        while let Some(words_for_line) = Self::words_for_next_line(&mut words, allowed) {
-            let line = if words.peek().is_some() {
-                Self::line_padded_to(words_for_line, allowed)
-            } else {
-                // only single spaces for the last line in the paragraph
-                words_for_line.join(" ")
-            };
-
-            writeln!(&mut into, "       {}", line)?;
-        }
-
-        Ok(())
-    }
-
-    fn words_for_next_line<S, I>(words: &mut Peekable<I>, allowed: usize) -> Option<Vec<S>>
-    where
-        S: AsRef<str>,
-        I: Iterator<Item = S>,
-    {
-        words.peek()?;
-
-        let mut len_sum = 0;
-        Some(
-            words
-                .peeking_take_while(move |w| {
-                    let wl = w.as_ref().graphemes(true).count();
-                    if len_sum == 0 {
-                        len_sum = wl;
-                        true
-                    } else {
-                        let len_with_word = len_sum + wl + 1;
-                        if len_with_word <= allowed {
-                            len_sum = len_with_word;
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                })
-                .collect(),
-        )
-    }
-
-    fn line_padded_to(words: Vec<&str>, pad_to: usize) -> String {
-        assert!(!words.is_empty());
-
-        if words.len() == 1 {
-            return words[0].to_string();
-        }
-
-        let total_chars: usize = words.iter().map(|w| w.graphemes(true).count()).sum();
-        let gaps = words.len() - 1;
-        assert!(total_chars + gaps <= pad_to);
-        let total_spaces = pad_to - total_chars;
-
-        let spaces_in_every_gap = " ".repeat(total_spaces / gaps);
-        let mut remaining_gaps_with_extra_space = total_spaces % gaps;
-
-        let mut res = String::with_capacity(pad_to);
-        res.push_str(words[0]);
-        for w in &words[1..] {
-            if remaining_gaps_with_extra_space > 0 {
-                remaining_gaps_with_extra_space -= 1;
-                res.push(' ');
-            }
-            res.push_str(&spaces_in_every_gap);
-            res.push_str(w)
-        }
-
-        res
-    }
-
-    fn print_raw(&self) -> bool {
-        self.lines.iter().any(|l| l.starts_with("    "))
-    }
-}
-
-impl Heading {
-    fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
-        writeln!(into, "{}", self.text.red().bold())
-    }
-}
-
-impl Printindex {
-    fn render<W: Write>(&self, mut into: W, node_lines: &HashMap<Id, usize>) -> io::Result<()> {
-        let longest_text = self
-            .entries
-            .iter()
-            .map(|e| e.text.graphemes(true).count())
-            .max()
-            .unwrap_or(0);
-
-        write!(into, "       {}", "* Index:\n".bold())?;
-        self.entries.iter().try_for_each(|e| {
-            writeln!(
-                into,
-                "         {:textlen$}\t{}",
-                e.text,
-                render_id(
-                    &Id {
-                        infofile: None,
-                        nodename: Some(e.node_spec.clone())
-                    },
-                    node_lines
-                ),
-                textlen = longest_text
-            )
-        })?;
-        writeln!(into)?;
-
-        Ok(())
-    }
-}
-
-impl Menu {
-    fn render<W: Write>(&self, mut into: W, node_lines: &HashMap<Id, usize>) -> io::Result<()> {
-        let longest_entry_nodename = self
-            .items
-            .iter()
-            .filter_map(|i| match i {
-                MenuItem::Entry(entry) => {
-                    Some(render_id(&entry.id, node_lines).graphemes(true).count())
-                }
-                MenuItem::Comment(_comment) => None,
-            })
-            .max()
-            .unwrap_or(0);
-
-        write!(into, "       {}", "* Menu:\n".bold())?;
-        self.items.iter().try_for_each(|i| {
-            match i {
-                MenuItem::Entry(entry) => {
-                    // TODO: labels
-                    write!(
-                        into,
-                        "         {:namelen$}\t{}{}",
-                        render_id(&entry.id, node_lines),
-                        entry.description.join(" "),
-                        "\n".repeat(entry.trailing_newlines + 1),
-                        namelen = longest_entry_nodename
-                    )
-                }
-                MenuItem::Comment(comment) => {
-                    write!(
-                        into,
-                        "         {}{}",
-                        &comment.lines.join(" "),
-                        "\n".repeat(comment.trailing_newlines + 1)
-                    )
-                }
-            }
-        })
     }
 }
 
@@ -265,8 +79,130 @@ fn render_id(node: &Id, node_lines: &HashMap<Id, usize>) -> String {
     format!(
         "{} ({})",
         node.nodename.clone().unwrap_or("".into()),
-        node_ref(node_lines, node).bold().blue()
+        style(node_ref(node_lines, node)).bold().fg(Color::Blue),
     )
+}
+
+pub struct FlowingLines<S, I>
+where
+    I: Iterator<Item = S>,
+{
+    words: Peekable<I>,
+    max_width: usize,
+    use_full_width: bool,
+}
+
+impl<S, I> Iterator for FlowingLines<S, I>
+where
+    S: AsRef<str> + Display,
+    I: Iterator<Item = S>,
+{
+    fn next(&mut self) -> Option<Self::Item> {
+        let words_for_line = self.words_for_next_line()?;
+        if self.words.peek().is_some() && self.use_full_width {
+            Some(self.line_padded(words_for_line))
+        } else {
+            // only single spaces for the last line
+            Some(words_for_line.into_iter().join(" "))
+        }
+    }
+
+    type Item = String;
+}
+
+impl<S, I> FlowingLines<S, I>
+where
+    S: AsRef<str>,
+    I: Iterator<Item = S>,
+{
+    fn words_for_next_line(&mut self) -> Option<Vec<S>> {
+        self.words.peek()?;
+
+        let mut len_sum = 0;
+        Some(
+            self.words
+                .peeking_take_while(|w| {
+                    let wl = w.as_ref().graphemes(true).count();
+                    if len_sum == 0 {
+                        len_sum = wl;
+                        true
+                    } else {
+                        let len_with_word = len_sum + wl + 1;
+                        if len_with_word <= self.max_width {
+                            len_sum = len_with_word;
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    fn line_padded(&self, words: Vec<S>) -> String {
+        assert!(!words.is_empty());
+
+        if words.len() == 1 {
+            return words[0].as_ref().to_string();
+        }
+
+        let total_chars: usize = words
+            .iter()
+            .map(|w| w.as_ref().graphemes(true).count())
+            .sum();
+        let gaps = words.len() - 1;
+        assert!(total_chars + gaps <= self.max_width);
+        let total_spaces = self.max_width - total_chars;
+
+        let spaces_in_every_gap = " ".repeat(total_spaces / gaps);
+        let mut remaining_gaps_with_extra_space = total_spaces % gaps;
+
+        let mut res = String::with_capacity(self.max_width);
+        res.push_str(words[0].as_ref());
+        for w in &words[1..] {
+            if remaining_gaps_with_extra_space > 0 {
+                remaining_gaps_with_extra_space -= 1;
+                res.push(' ');
+            }
+            res.push_str(&spaces_in_every_gap);
+            res.push_str(w.as_ref())
+        }
+
+        res
+    }
+}
+
+pub fn flowing_lines<S: AsRef<str> + Display, I: Iterator<Item = S>>(
+    words: I,
+    max_width: usize,
+    use_full_width: bool,
+) -> impl Iterator<Item = String> {
+    FlowingLines {
+        words: words.peekable(),
+        max_width,
+        use_full_width,
+    }
+}
+
+fn lines_into_words<'a, I: Iterator<Item = &'a String>>(lines: I) -> impl Iterator<Item = &'a str> {
+    lines.flat_map(|l| l.split_whitespace())
+}
+
+pub fn write_indented<W: Write, D: Display>(
+    mut into: W,
+    d: D,
+    opt: RenderOptions,
+) -> io::Result<()> {
+    write!(into, "{}{}", " ".repeat(opt.indent()), d)
+}
+
+pub fn writeln_indented<W: Write, D: Display>(
+    mut into: W,
+    d: D,
+    opt: RenderOptions,
+) -> io::Result<()> {
+    writeln!(into, "{}{}", " ".repeat(opt.indent()), d)
 }
 
 struct CountNewlines {

@@ -1,13 +1,54 @@
 use std::io::{self, Write};
 
+use terminal_size::{Height, Width};
+
 pub mod config;
 mod control;
 pub mod info;
 pub mod pager;
 mod parser_util;
 
+#[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
-    pub max_width: usize,
+    indent: usize,
+    max_width: usize,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RenderOptions {
+    pub fn new() -> Self {
+        Self {
+            indent: 0,
+            max_width: 79,
+        }
+    }
+
+    pub fn new_for_terminal(dim: (Width, Height)) -> Self {
+        Self {
+            indent: 0,
+            max_width: (dim.0.0.saturating_sub(1)).into(),
+        }
+    }
+
+    pub fn indented(&self, indent: usize) -> Self {
+        Self {
+            indent: self.indent + indent,
+            max_width: self.max_width - indent,
+        }
+    }
+
+    pub fn indent(&self) -> usize {
+        self.indent
+    }
+
+    pub fn max_width(&self) -> usize {
+        self.max_width
+    }
 }
 
 pub trait Manual {
