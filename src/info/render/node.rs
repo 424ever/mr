@@ -3,9 +3,11 @@ use std::{
     io::{self, Write},
 };
 
+use glyphs::style;
+
 use crate::{
     RenderOptions,
-    info::{Id, Node, TextBlockContent},
+    info::{Id, Node, TextBlockContent, render::writeln_indented},
 };
 
 impl Node {
@@ -23,6 +25,27 @@ impl Node {
                 printindex.render(&mut into, opt, node_lines)
             }
             TextBlockContent::Heading(heading) => heading.render(&mut into),
+            TextBlockContent::Verbatim(verbatim) => {
+                verbatim.lines.iter().try_for_each(|l| {
+                    writeln_indented(
+                        &mut into,
+                        style(l).fg(glyphs::Color::Green),
+                        opt.indented(5),
+                    )
+                })?;
+                writeln!(into)
+            }
+            TextBlockContent::BunchOfUnknownLines(lines) => {
+                lines.iter().try_for_each(|l| {
+                    writeln_indented(
+                        &mut into,
+                        style(l).fg(glyphs::Color::BrightRed),
+                        opt.indented(5),
+                    )
+                })?;
+                writeln!(into)?;
+                Ok(())
+            }
         })
     }
 }

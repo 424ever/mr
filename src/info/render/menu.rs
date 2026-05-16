@@ -71,6 +71,6 @@ impl Menu {
                 }
             }
         })?;
-        writeln!(&mut into, "")
+        writeln!(&mut into)
     }
 }

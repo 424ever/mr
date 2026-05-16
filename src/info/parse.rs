@@ -13,7 +13,7 @@ use winnow::{
         terminated,
     },
     error::{ContextError, ErrMode, StrContext},
-    stream::{Location, Offset as _},
+    stream::{AsChar, Location, Offset as _},
     token::{any, literal, one_of, take_till, take_until},
 };
 
@@ -70,7 +70,7 @@ fn preamble(input: &mut Stream<'_>) -> Result<Preamble> {
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
-fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
+fn node(input: &mut Stream<'_>) -> Result<Node> {
     let invalid_id_chars = &[','];
 
     _ = SEPARATOR
@@ -120,7 +120,7 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
 
     let start_offset = input.current_token_start();
 
-    let general_text: Vec<_> = repeat(0.., text_block)
+    let general_text: Vec<_> = repeat(0.., text_block(0))
         .context("general text".label())
         .parse_next(input)?;
 
@@ -135,29 +135,57 @@ fn node(input: &mut LocatingSlice<&str>) -> Result<Node> {
     })
 }
 
-fn text_block(input: &mut Stream<'_>) -> Result<TextBlock> {
-    not(peek(SEPARATOR)).parse_next(input)?;
+fn text_block<'a>(min_indent: usize) -> impl Parser<Stream<'a>, TextBlock, ErrMode<ContextError>> {
+    move |input: &mut Stream<'a>| {
+        not(peek(SEPARATOR)).parse_next(input)?;
 
-    let start_offset = input.current_token_start();
+        let start_offset = input.current_token_start();
 
-    let content = alt((
+        let content = if min_indent == 0 {
+            alt((
+                top_level_text_block_content,
+                nestable_text_block_content(min_indent),
+            ))
+            .parse_next(input)
+        } else {
+            nestable_text_block_content(min_indent).parse_next(input)
+        }?;
+
+        let end_offset = input.previous_token_end();
+
+        repeat::<_, _, (), _, _>(0.., line_ending).parse_next(input)?;
+
+        Ok(TextBlock {
+            start_offset,
+            end_offset,
+            content,
+        })
+    }
+}
+
+fn top_level_text_block_content(input: &mut Stream<'_>) -> Result<TextBlockContent> {
+    alt((
         printindex.map(TextBlockContent::Printindex),
         menu.map(TextBlockContent::Menu),
         heading.map(TextBlockContent::Heading),
-        paragraph.map(TextBlockContent::Paragraph),
     ))
-    .parse_next(input)?;
-    let _: Vec<_> = repeat(0.., newline)
-        .context("newlines between text blocks".label())
-        .parse_next(input)?;
+    .parse_next(input)
+}
 
-    let end_offset = input.previous_token_end();
-
-    Ok(TextBlock {
-        start_offset,
-        end_offset,
-        content,
-    })
+fn nestable_text_block_content<'a>(
+    min_indent: usize,
+) -> impl Parser<Stream<'a>, TextBlockContent, ErrMode<ContextError>> {
+    alt((
+        verbatim(min_indent).map(TextBlockContent::Verbatim),
+        paragraph(min_indent).map(TextBlockContent::Paragraph),
+        repeat(
+            1..,
+            indented_line(min_indent)
+                .verify(|l: &str| !l.is_empty())
+                .map(|l| l.to_string()),
+        )
+        .map(TextBlockContent::BunchOfUnknownLines),
+    ))
 }
 
 fn heading(input: &mut Stream<'_>) -> Result<Heading> {
@@ -166,6 +194,7 @@ fn heading(input: &mut Stream<'_>) -> Result<Heading> {
         .to_string();
     let ul = peek(one_of(['*', '=', '-', '.'])).parse_next(input)?;
     repeat::<_, _, (), _, _>(text.graphemes(true).count(), literal(ul)).parse_next(input)?;
+    line_ending.parse_next(input)?;
 
     Ok(Heading {
         level: match ul {
@@ -359,20 +388,46 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
     })
 }
 
-fn paragraph(input: &mut Stream<'_>) -> Result<Paragraph> {
-    terminated(
+fn paragraph<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Paragraph, ErrMode<ContextError>> {
+    fn valid_line(l: &str) -> bool {
+        !l.is_empty() && !l.chars().next().unwrap().is_space()
+    }
+
+    (
+        opt(indented_line(min_indent + 3).verify(valid_line)),
         repeat(
-            1..,
-            (not(newline), take_until(0.., '\n'), newline)
-                .take()
-                .context("line".expected())
+            0..,
+            indented_line(min_indent)
+                .verify(valid_line)
                 .map(|l: &str| l.trim_end().to_string()),
-        )
-        .map(|lines: Vec<_>| Paragraph { lines })
-        .context("paragraph".label()),
+        ),
+    )
+        .verify_map(|(more_indented_first, mut lines): (_, Vec<_>)| {
+            if let Some(first) = more_indented_first {
+                lines.insert(0, first.into());
+            }
+            if !lines.is_empty() {
+                Some(Paragraph { lines })
+            } else {
+                None
+            }
+        })
+}
+
+fn verbatim<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Verbatim, ErrMode<ContextError>> {
+    repeat(
+        1..,
+        indented_line(min_indent + 5).map(|l: &str| l.trim_end().to_string()),
+    )
+    .map(|lines: Vec<_>| Verbatim { lines })
+}
+
+fn indented_line<'a>(min_indent: usize) -> impl Parser<Stream<'a>, &'a str, ErrMode<ContextError>> {
+    delimited(
+        repeat::<_, _, (), _, _>(min_indent..=min_indent, ' ').take(),
+        take_until(0.., '\n'),
         newline,
     )
-    .parse_next(input)
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
@@ -492,11 +547,11 @@ mod tests {
             "* Label:Item 2. Description\n",
         ));
         assert_eq!(
-            repeat(1.., text_block).parse(input),
+            repeat(1.., text_block(0),).parse(input),
             Ok(vec![
                 TextBlock {
                     start_offset: 0,
-                    end_offset: 17,
+                    end_offset: 16,
                     content: TextBlockContent::Heading(Heading {
                         level: HeadingLevel::Major,
                         text: "Heading".to_string()
@@ -504,7 +559,7 @@ mod tests {
                 },
                 TextBlock {
                     start_offset: 17,
-                    end_offset: 23,
+                    end_offset: 22,
                     content: TextBlockContent::Paragraph(Paragraph {
                         lines: vec!["Text".into()]
                     })
@@ -641,6 +696,51 @@ mod tests {
                         trailing_newlines: 1
                     }),
                 ]
+            })
+        );
+    }
+
+    #[test]
+    fn test_paragraph() {
+        let input = LocatingSlice::new(concat!("Line 1\n"));
+        assert_eq!(
+            paragraph(0).parse(input),
+            Ok(Paragraph {
+                lines: vec!["Line 1".into()]
+            })
+        );
+
+        let input = LocatingSlice::new(concat!("Line 1\n", "Line 2\n"));
+        assert_eq!(
+            paragraph(0).parse(input),
+            Ok(Paragraph {
+                lines: vec!["Line 1".into(), "Line 2".into(),]
+            })
+        );
+
+        let input = LocatingSlice::new(concat!("   Line 1\n", "Line 2\n"));
+        assert_eq!(
+            paragraph(0).parse(input),
+            Ok(Paragraph {
+                lines: vec!["Line 1".into(), "Line 2".into(),]
+            })
+        );
+
+        let input = LocatingSlice::new(concat!("  Line 1\n", "  Line 2\n"));
+        assert!(paragraph(0).parse(input.clone()).is_err());
+        assert_eq!(
+            paragraph(2).parse(input),
+            Ok(Paragraph {
+                lines: vec!["Line 1".into(), "Line 2".into(),]
+            })
+        );
+
+        let input = LocatingSlice::new(concat!("     Line 1\n", "  Line 2\n"));
+        assert!(paragraph(0).parse(input.clone()).is_err());
+        assert_eq!(
+            paragraph(2).parse(input),
+            Ok(Paragraph {
+                lines: vec!["Line 1".into(), "Line 2".into(),]
             })
         );
     }
