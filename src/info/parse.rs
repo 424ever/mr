@@ -13,7 +13,7 @@ use winnow::{
         terminated,
     },
     error::{ContextError, ErrMode, StrContext},
-    stream::{AsChar, Location, Offset as _},
+    stream::{AsChar, Location, Offset as _, Range},
     token::{any, literal, one_of, take_till, take_until},
 };
 
@@ -395,7 +395,7 @@ fn paragraph<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Paragraph, ErrMod
     }
 
     (
-        opt(indented_line(min_indent + 3).verify(valid_line)),
+        opt(indented_line((min_indent + 1)..=(min_indent + 3)).verify(valid_line)),
         repeat(
             0..,
             indented_line(min_indent)
@@ -436,9 +436,11 @@ fn verbatim<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Verbatim, ErrMode<
     .map(|lines: Vec<_>| Verbatim { lines })
 }
 
-fn indented_line<'a>(min_indent: usize) -> impl Parser<Stream<'a>, &'a str, ErrMode<ContextError>> {
+fn indented_line<'a>(
+    min_indent: impl Into<Range>,
+) -> impl Parser<Stream<'a>, &'a str, ErrMode<ContextError>> {
     delimited(
-        repeat::<_, _, (), _, _>(min_indent..=min_indent, ' ').take(),
+        repeat::<_, _, (), _, _>(min_indent, ' ').take(),
         take_until(0.., '\n'),
         newline,
     )
