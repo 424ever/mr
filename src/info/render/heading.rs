@@ -1,11 +1,12 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use glyphs::{Color, style};
 
 use crate::info::Heading;
 
 impl Heading {
-    pub(super) fn render<W: Write>(&self, mut into: W) -> io::Result<()> {
-        writeln!(into, "{}", style(&self.text).fg(Color::Red).bold())
+    pub(super) fn render(&self, into: &mut dyn Write) -> anyhow::Result<()> {
+        writeln!(into, "{}", style(&self.text).fg(Color::Red).bold())?;
+        Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use crate::{
     RenderOptions,
@@ -9,10 +9,10 @@ use crate::{
 };
 
 impl Paragraph {
-    pub(super) fn render<W: Write>(&self, mut into: W, opt: RenderOptions) -> io::Result<()> {
+    pub(super) fn render(&self, into: &mut dyn Write, opt: RenderOptions) -> anyhow::Result<()> {
         flowing_lines(lines_into_words(self.lines.iter()), opt.max_width(), true)
-            .try_for_each(|line| writeln_indented(&mut into, line, opt))?;
-        writeln!(&mut into)?;
+            .try_for_each(|line| writeln_indented(into, line, opt))?;
+        writeln!(into)?;
         Ok(())
     }
 }

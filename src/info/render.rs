@@ -3,6 +3,7 @@ mod index;
 mod menu;
 mod node;
 mod paragraph;
+mod table;
 
 use std::{
     collections::HashMap,
@@ -23,13 +24,15 @@ use crate::{
 const MAX_REF_DIGITS: usize = 5;
 
 impl Manual for NonsplitInfoFile {
-    fn render<W>(&self, into: W, opt: RenderOptions) -> io::Result<()>
+    fn render<W>(&self, into: W, opt: RenderOptions) -> anyhow::Result<()>
     where
         W: Write,
     {
         let node_lines = self.resolve_node_begin_lines(opt)?;
 
-        self.render_nodes(into, opt, &node_lines, |_, _| {})
+        self.render_nodes(into, opt, &node_lines, |_, _| {})?;
+
+        Ok(())
     }
 
     fn title(&self) -> &str {
@@ -48,19 +51,20 @@ impl NonsplitInfoFile {
         opt: RenderOptions,
         node_lines: &HashMap<Id, usize>,
         mut before_render: F,
-    ) -> io::Result<()> {
+    ) -> anyhow::Result<()> {
         self.nodes.iter().try_for_each(|n| {
             before_render(&n.node, &into);
             n.render(&mut into, opt, node_lines)
-        })
+        })?;
+        Ok(())
     }
 
-    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> io::Result<HashMap<Id, usize>> {
-        let mut w = CountNewlines::new();
+    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> anyhow::Result<HashMap<Id, usize>> {
+        let w = CountNewlines::new();
         let mut map = HashMap::new();
         let fake = HashMap::new();
 
-        self.render_nodes(&mut w, opt, &fake, |id, w| {
+        self.render_nodes(w, opt, &fake, |id, w| {
             map.insert(id.clone(), w.count() + 1);
         })?;
 
@@ -197,8 +201,8 @@ pub fn write_indented<W: Write, D: Display>(
     write!(into, "{}{}", " ".repeat(opt.indent()), d)
 }
 
-pub fn writeln_indented<W: Write, D: Display>(
-    mut into: W,
+pub fn writeln_indented<D: Display>(
+    into: &mut dyn Write,
     d: D,
     opt: RenderOptions,
 ) -> io::Result<()> {

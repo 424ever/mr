@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{self, Write},
+    io::Write,
 };
 
 use glyphs::{style, visible_len};
@@ -14,12 +14,12 @@ use crate::{
 };
 
 impl Menu {
-    pub(super) fn render<W: Write>(
+    pub(super) fn render(
         &self,
-        mut into: W,
+        into: &mut dyn Write,
         opt: RenderOptions,
         node_lines: &HashMap<Id, usize>,
-    ) -> io::Result<()> {
+    ) -> anyhow::Result<()> {
         let longest_entry_nodename = self
             .items
             .iter()
@@ -30,7 +30,7 @@ impl Menu {
             .max()
             .unwrap_or(0);
 
-        writeln_indented(&mut into, style("* Menu:").bold(), opt)?;
+        writeln_indented(into, style("* Menu:").bold(), opt)?;
 
         let id_opt = opt.indented(2);
         let descr_opt = id_opt.indented(longest_entry_nodename + 2);
@@ -42,7 +42,7 @@ impl Menu {
                     let id = render_id(&entry.id, node_lines);
                     let pad = longest_entry_nodename - visible_len(&id);
                     write_indented(
-                        &mut into,
+                        &mut *into,
                         format_args!("{}{}  ", id, " ".repeat(pad)),
                         id_opt,
                     )?;
@@ -54,11 +54,13 @@ impl Menu {
                     // First line
                     let first = descr.next();
                     if let Some(first) = first {
-                        writeln!(&mut into, "{}", first)?;
+                        writeln!(into, "{}", first)?;
+                    } else {
+                        writeln!(into)?;
                     }
                     // Further lines
-                    descr.try_for_each(|l| writeln_indented(&mut into, l, descr_opt))?;
-                    write!(&mut into, "{}", "\n".repeat(entry.trailing_newlines))
+                    descr.try_for_each(|l| writeln_indented(into, l, descr_opt))?;
+                    write!(into, "{}", "\n".repeat(entry.trailing_newlines))
                 }
                 MenuItem::Comment(comment) => {
                     flowing_lines(
@@ -66,11 +68,12 @@ impl Menu {
                         opt.max_width(),
                         false,
                     )
-                    .try_for_each(|l| writeln_indented(&mut into, l, id_opt))?;
+                    .try_for_each(|l| writeln_indented(into, l, id_opt))?;
                     write!(into, "{}", "\n".repeat(comment.trailing_newlines))
                 }
             }
         })?;
-        writeln!(&mut into)
+        writeln!(into)?;
+        Ok(())
     }
 }

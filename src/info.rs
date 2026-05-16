@@ -68,6 +68,7 @@ pub enum TextBlockContent {
     Printindex(Printindex),
     Heading(Heading),
     Verbatim(Verbatim),
+    TableEntry(TableEntry),
     BunchOfUnknownLines(Vec<String>),
 }
 
@@ -131,6 +132,12 @@ pub enum HeadingLevel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verbatim {
     lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableEntry {
+    title: String,
+    description: Vec<TextBlock>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

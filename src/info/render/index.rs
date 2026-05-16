@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{self, Write},
+    io::Write,
 };
 
 use glyphs::style;
@@ -14,17 +14,17 @@ use crate::{
 };
 
 impl Printindex {
-    pub(super) fn render<W: Write>(
+    pub(super) fn render(
         &self,
-        mut into: W,
+        into: &mut dyn Write,
         opt: RenderOptions,
         node_lines: &HashMap<Id, usize>,
-    ) -> io::Result<()> {
-        writeln_indented(&mut into, style("* Index:\n").bold(), opt)?;
+    ) -> anyhow::Result<()> {
+        writeln_indented(into, style("* Index:\n").bold(), opt)?;
         let opt = opt.indented(2);
         self.entries.iter().try_for_each(|e| {
             writeln_indented(
-                &mut into,
+                into,
                 format_args!(
                     "{}: {}",
                     style(&e.text).underline(),

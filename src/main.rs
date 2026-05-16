@@ -1,5 +1,5 @@
 use std::{
-    io::{self},
+    io::{self, ErrorKind},
     path::PathBuf,
 };
 
@@ -36,11 +36,18 @@ fn main() -> anyhow::Result<()> {
         RenderOptions::new()
     };
 
-    match manual.render(&mut output, opt) {
-        Ok(_) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        Err(e) => Err(e),
-    }?;
+    // match  {
+    //     Ok(_) => Ok(()),
+    //     Err(e) if e.downcast::<io::Error>().unwrap().kind() == io::ErrorKind::BrokenPipe => Ok(()),
+    //     Err(e) => Err(e),
+    // }?;
+    if let Err(e) = manual.render(&mut output, opt) {
+        if let Some(ioe) = e.downcast_ref::<io::Error>()
+            && ioe.kind() != ErrorKind::BrokenPipe
+        {
+            return Err(e);
+        }
+    }
 
     output.wait()?;
 

@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use terminal_size::{Height, Width};
 
@@ -52,7 +52,7 @@ impl RenderOptions {
 }
 
 pub trait Manual {
-    fn render<W>(&self, into: W, opt: RenderOptions) -> io::Result<()>
+    fn render<W>(&self, into: W, opt: RenderOptions) -> anyhow::Result<()>
     where
         W: Write;
 

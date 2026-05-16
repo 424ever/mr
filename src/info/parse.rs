@@ -176,6 +176,7 @@ fn nestable_text_block_content<'a>(
     min_indent: usize,
 ) -> impl Parser<Stream<'a>, TextBlockContent, ErrMode<ContextError>> {
     alt((
+        table_entry(min_indent).map(TextBlockContent::TableEntry),
         verbatim(min_indent).map(TextBlockContent::Verbatim),
         paragraph(min_indent).map(TextBlockContent::Paragraph),
         repeat(
@@ -411,6 +412,19 @@ fn paragraph<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Paragraph, ErrMod
             } else {
                 None
             }
+        })
+}
+
+fn table_entry<'a>(
+    min_indent: usize,
+) -> impl Parser<Stream<'a>, TableEntry, ErrMode<ContextError>> {
+    (
+        indented_line(min_indent),
+        repeat(1.., text_block(min_indent + 5)),
+    )
+        .map(|(title, description)| TableEntry {
+            title: title.to_string(),
+            description,
         })
 }
 
@@ -743,5 +757,40 @@ mod tests {
                 lines: vec!["Line 1".into(), "Line 2".into(),]
             })
         );
+    }
+
+    #[test]
+    fn test_table_entry() {
+        let input = LocatingSlice::new(concat!(
+            "title\n",
+            "     descr 1 line 1\n",
+            "     descr 1 line 2\n",
+            "\n",
+            "     descr 2 line 1\n",
+            "     descr 2 line 2\n",
+            "\n"
+        ));
+        assert_eq!(
+            table_entry(0).parse(input),
+            Ok(TableEntry {
+                title: "title".to_string(),
+                description: vec![
+                    TextBlock {
+                        start_offset: 6,
+                        end_offset: 46,
+                        content: TextBlockContent::Paragraph(Paragraph {
+                            lines: vec!["descr 1 line 1".to_string(), "descr 1 line 2".to_string()]
+                        })
+                    },
+                    TextBlock {
+                        start_offset: 47,
+                        end_offset: 87,
+                        content: TextBlockContent::Paragraph(Paragraph {
+                            lines: vec!["descr 2 line 1".to_string(), "descr 2 line 2".to_string()]
+                        })
+                    }
+                ]
+            })
+        )
     }
 }
