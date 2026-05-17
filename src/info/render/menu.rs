@@ -1,15 +1,15 @@
-use std::{
-    collections::HashMap,
-    io::Write,
-};
+use std::io::Write;
 
 use glyphs::{style, visible_len};
 
 use crate::{
     RenderOptions,
     info::{
-        Id, Menu, MenuItem,
-        render::{flowing_lines, lines_into_words, render_id, write_indented, writeln_indented},
+        Menu, MenuItem,
+        render::{
+            ResolvedNodeLines, flowing_lines, lines_into_words, render_id, write_indented,
+            writeln_indented,
+        },
     },
 };
 
@@ -18,7 +18,7 @@ impl Menu {
         &self,
         into: &mut dyn Write,
         opt: RenderOptions,
-        node_lines: &HashMap<Id, usize>,
+        node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
         let longest_entry_nodename = self
             .items

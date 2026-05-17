@@ -4,6 +4,7 @@ mod menu;
 mod node;
 mod paragraph;
 mod table;
+mod verbatim;
 
 use std::{
     collections::HashMap,
@@ -22,6 +23,8 @@ use crate::{
 };
 
 const MAX_REF_DIGITS: usize = 5;
+
+type ResolvedNodeLines = HashMap<String, usize>;
 
 impl Manual for NonsplitInfoFile {
     fn render<W>(&self, into: W, opt: RenderOptions) -> anyhow::Result<()>
@@ -49,7 +52,7 @@ impl NonsplitInfoFile {
         &self,
         mut into: W,
         opt: RenderOptions,
-        node_lines: &HashMap<Id, usize>,
+        node_lines: &ResolvedNodeLines,
         mut before_render: F,
     ) -> anyhow::Result<()> {
         self.nodes.iter().try_for_each(|n| {
@@ -59,27 +62,35 @@ impl NonsplitInfoFile {
         Ok(())
     }
 
-    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> anyhow::Result<HashMap<Id, usize>> {
+    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> anyhow::Result<ResolvedNodeLines> {
         let w = CountNewlines::new();
         let mut map = HashMap::new();
         let fake = HashMap::new();
 
         self.render_nodes(w, opt, &fake, |id, w| {
-            map.insert(id.clone(), w.count() + 1);
+            if let Some(ref name) = id.nodename {
+                map.insert(name.clone(), w.count() + 1);
+            }
         })?;
 
         Ok(map)
     }
 }
 
-fn node_ref(map: &HashMap<Id, usize>, id: &Id) -> String {
-    match map.get(id) {
-        Some(line) => format!("{}G", line),
-        None => "?".repeat(MAX_REF_DIGITS + 1),
+fn node_ref(map: &ResolvedNodeLines, id: &Id) -> String {
+    match (&id.infofile, &id.nodename) {
+        (None, Some(name)) => match map.get(name) {
+            Some(line) => format!("{}G", line),
+            None => "?".repeat(MAX_REF_DIGITS + 1),
+        },
+        (None, None) => format!("unknown"),
+        (Some(file), _) => {
+            format!("in {}", file)
+        }
     }
 }
 
-fn render_id(node: &Id, node_lines: &HashMap<Id, usize>) -> String {
+fn render_id(node: &Id, node_lines: &ResolvedNodeLines) -> String {
     format!(
         "{} ({})",
         node.nodename.clone().unwrap_or("".into()),
@@ -87,7 +98,7 @@ fn render_id(node: &Id, node_lines: &HashMap<Id, usize>) -> String {
     )
 }
 
-pub struct FlowingLines<S, I>
+struct FlowingLines<S, I>
 where
     I: Iterator<Item = S>,
 {
@@ -177,7 +188,7 @@ where
     }
 }
 
-pub fn flowing_lines<S: AsRef<str> + Display, I: Iterator<Item = S>>(
+fn flowing_lines<S: AsRef<str> + Display, I: Iterator<Item = S>>(
     words: I,
     max_width: usize,
     use_full_width: bool,
@@ -193,19 +204,11 @@ fn lines_into_words<'a, I: Iterator<Item = &'a String>>(lines: I) -> impl Iterat
     lines.flat_map(|l| l.split_whitespace())
 }
 
-pub fn write_indented<W: Write, D: Display>(
-    mut into: W,
-    d: D,
-    opt: RenderOptions,
-) -> io::Result<()> {
+fn write_indented<W: Write, D: Display>(mut into: W, d: D, opt: RenderOptions) -> io::Result<()> {
     write!(into, "{}{}", " ".repeat(opt.indent()), d)
 }
 
-pub fn writeln_indented<D: Display>(
-    into: &mut dyn Write,
-    d: D,
-    opt: RenderOptions,
-) -> io::Result<()> {
+fn writeln_indented<D: Display>(into: &mut dyn Write, d: D, opt: RenderOptions) -> io::Result<()> {
     writeln!(into, "{}{}", " ".repeat(opt.indent()), d)
 }
 

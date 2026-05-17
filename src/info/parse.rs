@@ -384,7 +384,10 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
 
     Ok(IndexEntry {
         text,
-        node_spec,
+        node: Id {
+            infofile: None,
+            nodename: Some(node_spec),
+        },
         line,
     })
 }

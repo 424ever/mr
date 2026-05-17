@@ -1,8 +1,11 @@
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
 
 use crate::{
     RenderOptions,
-    info::{Id, TableEntry, render::writeln_indented},
+    info::{
+        TableEntry,
+        render::{ResolvedNodeLines, writeln_indented},
+    },
 };
 
 impl TableEntry {
@@ -10,7 +13,7 @@ impl TableEntry {
         &self,
         into: &mut dyn Write,
         opt: RenderOptions,
-        node_lines: &HashMap<Id, usize>,
+        node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
         writeln_indented(into, &self.title, opt)?;
         self.description

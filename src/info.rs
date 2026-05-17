@@ -110,7 +110,7 @@ pub struct Printindex {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexEntry {
     text: String,
-    node_spec: String,
+    node: Id,
     line: usize,
 }
 

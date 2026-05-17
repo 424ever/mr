@@ -1,15 +1,12 @@
-use std::{
-    collections::HashMap,
-    io::Write,
-};
+use std::io::Write;
 
 use glyphs::style;
 
 use crate::{
     RenderOptions,
     info::{
-        Id, Printindex,
-        render::{render_id, writeln_indented},
+        Printindex,
+        render::{ResolvedNodeLines, render_id, writeln_indented},
     },
 };
 
@@ -18,7 +15,7 @@ impl Printindex {
         &self,
         into: &mut dyn Write,
         opt: RenderOptions,
-        node_lines: &HashMap<Id, usize>,
+        node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
         writeln_indented(into, style("* Index:\n").bold(), opt)?;
         let opt = opt.indented(2);
@@ -28,13 +25,7 @@ impl Printindex {
                 format_args!(
                     "{}: {}",
                     style(&e.text).underline(),
-                    render_id(
-                        &Id {
-                            infofile: None,
-                            nodename: Some(e.node_spec.clone())
-                        },
-                        node_lines,
-                    )
+                    render_id(&e.node, node_lines,)
                 ),
                 opt,
             )
