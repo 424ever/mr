@@ -8,7 +8,7 @@ pub mod info;
 pub mod pager;
 mod parser_util;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderOptions {
     indent: usize,
     max_width: usize,

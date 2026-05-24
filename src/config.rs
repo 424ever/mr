@@ -25,15 +25,22 @@ impl Settings {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct UiSettings {
-    pub pager: Vec<String>,
+    pub pager: PagerSettings,
 }
 
-impl Default for UiSettings {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PagerSettings {
+    pub cmd: Vec<String>,
+    pub start_line_arg: Option<String>,
+}
+
+impl Default for PagerSettings {
     fn default() -> Self {
         Self {
-            pager: vec!["less".into(), "-FXR".into()],
+            cmd: vec!["less".into(), "-FXR".into()],
+            start_line_arg: Some("+{}G".into()),
         }
     }
 }

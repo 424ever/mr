@@ -12,6 +12,8 @@ use terminal_size::terminal_size;
 struct Cli {
     /// manual to display
     manual: String,
+    /// the node to display on startup
+    node: Option<String>,
     /// do not use a pager
     #[arg(long)]
     no_pager: bool,
@@ -24,20 +26,28 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let config: Settings = Settings::load()?;
 
-    let mut output = match (cli.no_pager, config.ui.pager) {
-        (true, _) => WriteTarget::new_unpaged(),
-        (false, c) if c.is_empty() => WriteTarget::new_unpaged(),
-        (false, c) => WriteTarget::new_paged(c)?,
-    };
-
-    let content = fs::read_to_string(&cli.manual)?;
-    let manual =
-        info::read_nonsplit_manual(&content).context(format!("parsing {} failed", cli.manual))?;
-
     let opt = if let Some(dim) = terminal_size() {
         RenderOptions::new_for_terminal(dim)
     } else {
         RenderOptions::new()
+    };
+
+    let content = fs::read_to_string(&cli.manual)?;
+    let manual =
+        info::read_nonsplit_manual(&content).context(format!("reading {} failed", cli.manual))?;
+
+    let start_line = if let Some(ref node) = cli.node
+        && !cli.no_pager
+    {
+        manual.start_line_for(opt, node)?
+    } else {
+        None
+    };
+
+    let mut output = match (cli.no_pager, config.ui.pager) {
+        (true, _) => WriteTarget::new_unpaged(),
+        (false, c) if c.cmd.is_empty() => WriteTarget::new_unpaged(),
+        (false, c) => WriteTarget::new_paged(&c, start_line)?,
     };
 
     if cli.print_ast {

@@ -18,40 +18,17 @@ use itertools::Itertools as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::{
-    Manual, RenderOptions,
-    info::{Id, NonsplitInfoFile},
+    RenderOptions,
+    info::{Id, NonsplitInfoFile, ResolvedNodeLines},
 };
 
 const MAX_REF_DIGITS: usize = 5;
 
-type ResolvedNodeLines = HashMap<String, usize>;
-
-impl Manual for NonsplitInfoFile {
-    fn render<W>(&self, into: W, opt: RenderOptions) -> anyhow::Result<()>
-    where
-        W: Write,
-    {
-        let node_lines = self.resolve_node_begin_lines(opt)?;
-
-        self.render_nodes(into, opt, &node_lines, |_, _| {})?;
-
-        Ok(())
-    }
-
-    fn title(&self) -> &str {
-        self.nodes
-            .first()
-            .as_ref()
-            .map(|n| n.file.as_str())
-            .unwrap_or("")
-    }
-}
-
 impl NonsplitInfoFile {
-    fn render_nodes<F: FnMut(&Id, &W), W: Write>(
+    pub(super) fn render_nodes<F: FnMut(&Id, &W), W: Write>(
         &self,
         mut into: W,
-        opt: RenderOptions,
+        opt: &RenderOptions,
         node_lines: &ResolvedNodeLines,
         mut before_render: F,
     ) -> anyhow::Result<()> {
@@ -62,7 +39,10 @@ impl NonsplitInfoFile {
         Ok(())
     }
 
-    fn resolve_node_begin_lines(&self, opt: RenderOptions) -> anyhow::Result<ResolvedNodeLines> {
+    pub(super) fn resolve_node_begin_lines(
+        &self,
+        opt: &RenderOptions,
+    ) -> anyhow::Result<ResolvedNodeLines> {
         let w = CountNewlines::new();
         let mut map = HashMap::new();
         let fake = HashMap::new();

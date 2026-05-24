@@ -5,6 +5,8 @@ use std::{
 
 use anyhow::Context;
 
+use crate::config::PagerSettings;
+
 pub enum WriteTarget {
     Stdout,
     Pager(Child),
@@ -15,11 +17,17 @@ impl WriteTarget {
         Self::Stdout
     }
 
-    pub fn new_paged(cmd: Vec<String>) -> anyhow::Result<Self> {
-        Command::new(&cmd[0])
-            .args(&cmd[1..])
-            .stdin(Stdio::piped())
-            .spawn()
+    pub fn new_paged(pager: &PagerSettings, start_line: Option<usize>) -> anyhow::Result<Self> {
+        let mut cmd = Command::new(pager.cmd[0].clone());
+        cmd.args(&pager.cmd[1..]).stdin(Stdio::piped());
+
+        if let Some(start) = start_line
+            && let Some(ref arg) = pager.start_line_arg
+        {
+            cmd.arg(arg.replace("{}", &format!("{}", start)));
+        }
+
+        cmd.spawn()
             .map(Self::Pager)
             .context("failed to start pager")
     }

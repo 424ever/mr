@@ -14,7 +14,7 @@ impl Node {
     pub(super) fn render(
         &self,
         into: &mut dyn Write,
-        opt: RenderOptions,
+        opt: &RenderOptions,
         node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
         let opt = opt.indented(7);

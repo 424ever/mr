@@ -5,8 +5,8 @@ use glyphs::style;
 use crate::{
     RenderOptions,
     info::{
-        Id, Printindex,
-        render::{ResolvedNodeLines, node_location, writeln_indented},
+        Id, Printindex, ResolvedNodeLines,
+        render::{node_location, writeln_indented},
     },
 };
 

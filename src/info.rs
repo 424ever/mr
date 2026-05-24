@@ -1,13 +1,54 @@
 pub mod parse;
 mod render;
 
+use std::{collections::HashMap, io};
+
 use winnow::Parser as _;
 
+use crate::{Manual, RenderOptions};
+
+type ResolvedNodeLines = HashMap<String, usize>;
+
+#[derive(Debug)]
+pub struct NonsplitManual {
+    file: NonsplitInfoFile,
+}
+
+impl Manual for NonsplitManual {
+    fn render<W>(&self, into: W, opt: crate::RenderOptions) -> anyhow::Result<()>
+    where
+        W: io::Write,
+    {
+        let res = self.resolve_lines(opt)?;
+        self.file.render_nodes(into, &opt, &res, |_, _| {})
+    }
+
+    fn title(&self) -> &str {
+        self.file
+            .nodes
+            .first()
+            .as_ref()
+            .map(|n| n.file.as_str())
+            .unwrap_or("")
+    }
+}
+
+impl NonsplitManual {
+    fn resolve_lines(&self, opt: RenderOptions) -> anyhow::Result<ResolvedNodeLines> {
+        self.file.resolve_node_begin_lines(&opt)
+    }
+
+    pub fn start_line_for(&self, opt: RenderOptions, node: &str) -> anyhow::Result<Option<usize>> {
+        Ok(self.resolve_lines(opt)?.get(node).copied())
+    }
+}
+
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub fn read_nonsplit_manual(content: &str) -> anyhow::Result<NonsplitInfoFile> {
+pub fn read_nonsplit_manual(content: &str) -> anyhow::Result<NonsplitManual> {
     parse::nonsplit_info_file
         .parse(&content)
-        .map_err(|e| anyhow::format_err!("{e}"))
+        .map(|f| Ok(NonsplitManual { file: f }))
+        .map_err(|e| anyhow::format_err!("{e}"))?
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
