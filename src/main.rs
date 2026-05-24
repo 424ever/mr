@@ -1,6 +1,6 @@
 use std::{
+    fs,
     io::{self, ErrorKind},
-    path::PathBuf,
 };
 
 use anyhow::Context;
@@ -10,8 +10,8 @@ use terminal_size::terminal_size;
 
 #[derive(Parser)]
 struct Cli {
-    /// info file to display
-    file: PathBuf,
+    /// manual to display
+    manual: String,
     /// do not use a pager
     #[arg(long)]
     no_pager: bool,
@@ -27,8 +27,9 @@ fn main() -> anyhow::Result<()> {
         (false, c) => WriteTarget::new_paged(c)?,
     };
 
-    let manual = info::read_nonsplit_manual(&cli.file)
-        .context(format!("parsing {} failed", cli.file.to_str().unwrap()))?;
+    let content = fs::read_to_string(&cli.manual)?;
+    let manual =
+        info::read_nonsplit_manual(&content).context(format!("parsing {} failed", cli.manual))?;
 
     let opt = if let Some(dim) = terminal_size() {
         RenderOptions::new_for_terminal(dim)
@@ -36,11 +37,6 @@ fn main() -> anyhow::Result<()> {
         RenderOptions::new()
     };
 
-    // match  {
-    //     Ok(_) => Ok(()),
-    //     Err(e) if e.downcast::<io::Error>().unwrap().kind() == io::ErrorKind::BrokenPipe => Ok(()),
-    //     Err(e) => Err(e),
-    // }?;
     if let Err(e) = manual.render(&mut output, opt) {
         if let Some(ioe) = e.downcast_ref::<io::Error>()
             && ioe.kind() != ErrorKind::BrokenPipe

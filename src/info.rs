@@ -1,13 +1,10 @@
 pub mod parse;
 mod render;
 
-use std::{fs, path::Path};
-
 use winnow::{LocatingSlice, Parser};
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-pub fn read_nonsplit_manual<P: AsRef<Path>>(path: P) -> anyhow::Result<NonsplitInfoFile> {
-    let content = fs::read_to_string(path)?;
+pub fn read_nonsplit_manual(content: &str) -> anyhow::Result<NonsplitInfoFile> {
     parse::nonsplit_info_file
         .parse(LocatingSlice::new(&content))
         .map_err(|e| anyhow::format_err!("{e}"))

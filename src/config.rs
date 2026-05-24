@@ -47,8 +47,8 @@ impl Default for InfoSettings {
     fn default() -> Self {
         Self {
             paths: vec![
-                SearchPath::FromEnv("INFOPATH".into()),
-                SearchPath::Path("/usr/share/info".into()),
+                SearchPath::DirsFromEnv("INFOPATH".into()),
+                SearchPath::Dir("/usr/share/info".into()),
             ],
         }
     }
@@ -56,6 +56,6 @@ impl Default for InfoSettings {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SearchPath {
-    FromEnv(String),
-    Path(PathBuf),
+    DirsFromEnv(String),
+    Dir(PathBuf),
 }
