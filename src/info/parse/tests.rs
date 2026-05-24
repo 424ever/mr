@@ -345,3 +345,78 @@ fn test_dir_node() {
         })
     );
 }
+
+#[test]
+fn test_menu_at_end_of_node() {
+    let input = make_stream(concat!(
+        "_\x1f\n",
+        "File: file.info,  Node: 1\n",
+        "\n",
+        "* Menu:\n",
+        "* I1::\n",
+        "Comment\n",
+        "\x1f\n",
+        "File: file.info,  Node: 2\n",
+        "\n",
+        "Foobar\n"
+    ));
+    let res = nonsplit_info_file.parse(input);
+    assert_eq!(
+        res,
+        Ok(NonsplitInfoFile {
+            preamble: Preamble {
+                content: "_".into()
+            },
+            nodes: vec![
+                Node {
+                    file: "file.info".into(),
+                    node: Id {
+                        infofile: None,
+                        nodename: Some("1".into())
+                    },
+                    next: None,
+                    prev: None,
+                    up: None,
+                    descr: None,
+                    general_text: vec![TextBlock {
+                        content: TextBlockContent::Menu(Menu {
+                            items: vec![
+                                MenuItem::Entry(MenuEntry {
+                                    label: None,
+                                    description: vec![],
+                                    id: Id {
+                                        infofile: None,
+                                        nodename: Some("I1".into())
+                                    },
+                                    trailing_newlines: 0
+                                }),
+                                MenuItem::Comment(MenuComment {
+                                    lines: vec!["Comment".into()],
+                                    trailing_newlines: 0
+                                })
+                            ]
+                        })
+                    }]
+                },
+                Node {
+                    file: "file.info".into(),
+                    node: Id {
+                        infofile: None,
+                        nodename: Some("2".into())
+                    },
+                    next: None,
+                    prev: None,
+                    up: None,
+                    descr: None,
+                    general_text: vec![TextBlock {
+                        content: TextBlockContent::Paragraph(Paragraph {
+                            lines: vec!["Foobar".into()]
+                        })
+                    }]
+                }
+            ],
+            tag_table: None,
+            local_variables: None
+        })
+    );
+}

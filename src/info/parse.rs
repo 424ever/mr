@@ -79,7 +79,6 @@ fn node(input: &mut Stream<'_>) -> Result<Node> {
     let invalid_id_chars = &[',', '\t'];
 
     _ = separator
-        .context("node start".label())
         .context("separator".expected())
         .parse_next(input)?;
 
@@ -119,7 +118,7 @@ fn node(input: &mut Stream<'_>) -> Result<Node> {
     let general_text = repeat_till(
         0..,
         cut_err(text_block(0)),
-        alt((separator.void(), eof.void())),
+        alt((peek(separator).void(), eof.void())),
     )
     .context("node body".label())
     .parse_next(input)?
@@ -298,7 +297,11 @@ fn menu_entry_without_label(input: &mut Stream<'_>) -> Result<MenuEntry> {
 fn menu_comment(input: &mut Stream<'_>) -> Result<MenuComment> {
     let lines = repeat(
         1..,
-        (not(alt((newline, '*'))), take_until(0.., '\n'), newline)
+        (
+            not(alt((newline.void(), '*'.void(), separator.void()))),
+            take_until(0.., '\n'),
+            newline,
+        )
             .take()
             .context("line".expected())
             .map(|l: &str| l.trim().to_string()),
