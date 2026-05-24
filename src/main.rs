@@ -1,11 +1,10 @@
-use std::{
-    fs,
-    io::{self, ErrorKind, Write as _},
-};
+use std::io::{self, ErrorKind, Write as _};
 
 use anyhow::Context;
 use clap::Parser;
-use mr::{Manual, RenderOptions, config::Settings, info, pager::WriteTarget};
+use mr::{
+    Manual, RenderOptions, config::Settings, info, pager::WriteTarget, read_maybe_gzipped_file,
+};
 use terminal_size::terminal_size;
 
 #[derive(Parser)]
@@ -32,7 +31,7 @@ fn main() -> anyhow::Result<()> {
         RenderOptions::new()
     };
 
-    let content = fs::read_to_string(&cli.manual)?;
+    let content = String::from_utf8(read_maybe_gzipped_file(&cli.manual)?)?;
     let manual =
         info::read_nonsplit_manual(&content).context(format!("reading {} failed", cli.manual))?;
 

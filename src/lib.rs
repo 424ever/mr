@@ -1,5 +1,10 @@
-use std::io::Write;
+use std::{
+    fs,
+    io::{Read, Write},
+    path::Path,
+};
 
+use flate2::read::GzDecoder;
 use terminal_size::{Height, Width};
 
 pub mod config;
@@ -57,4 +62,19 @@ pub trait Manual {
         W: Write;
 
     fn title(&self) -> &str;
+}
+
+pub fn read_maybe_gzipped_file(p: impl AsRef<Path>) -> anyhow::Result<Vec<u8>> {
+    let bytes = fs::read(p.as_ref())?;
+
+    if let Some(ext) = p.as_ref().extension()
+        && ext == "gz"
+    {
+        let mut decoder = GzDecoder::new(&bytes[..]);
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded)?;
+        Ok(decoded)
+    } else {
+        Ok(bytes)
+    }
 }
