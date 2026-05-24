@@ -1,13 +1,13 @@
 use std::io::Write;
 
-use glyphs::{style, visible_len};
+use glyphs::{Color, style, visible_len};
 
 use crate::{
     RenderOptions,
     info::{
-        Menu, MenuItem,
+        Menu, MenuEntry, MenuItem,
         render::{
-            ResolvedNodeLines, flowing_lines, lines_into_words, render_id, write_indented,
+            ResolvedNodeLines, flowing_lines, lines_into_words, node_location, write_indented,
             writeln_indented,
         },
     },
@@ -24,7 +24,7 @@ impl Menu {
             .items
             .iter()
             .filter_map(|i| match i {
-                MenuItem::Entry(entry) => Some(visible_len(&render_id(&entry.id, node_lines))),
+                MenuItem::Entry(entry) => Some(visible_len(&render_entry_id(&entry, node_lines))),
                 MenuItem::Comment(_comment) => None,
             })
             .max()
@@ -39,13 +39,14 @@ impl Menu {
             match i {
                 MenuItem::Entry(entry) => {
                     // TODO: labels
-                    let id = render_id(&entry.id, node_lines);
+                    let id = render_entry_id(&entry, node_lines);
                     let pad = longest_entry_nodename - visible_len(&id);
                     write_indented(
                         &mut *into,
                         format_args!("{}{}  ", id, " ".repeat(pad)),
                         id_opt,
                     )?;
+
                     let mut descr = flowing_lines(
                         lines_into_words(entry.description.iter()),
                         descr_opt.max_width(),
@@ -75,5 +76,25 @@ impl Menu {
         })?;
         writeln!(into)?;
         Ok(())
+    }
+}
+
+fn render_entry_id(entry: &MenuEntry, map: &ResolvedNodeLines) -> String {
+    let label = if let Some(ref label) = entry.label {
+        Some(label)
+    } else if let Some(ref nodename) = entry.id.nodename {
+        Some(nodename)
+    } else {
+        None
+    };
+
+    if let Some(label) = label {
+        format!(
+            "{} ({})",
+            style(label).fg(Color::Cyan),
+            node_location(map, &entry.id)
+        )
+    } else {
+        format!("({})", node_location(map, &entry.id))
     }
 }

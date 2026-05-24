@@ -5,8 +5,8 @@ use glyphs::style;
 use crate::{
     RenderOptions,
     info::{
-        Printindex,
-        render::{ResolvedNodeLines, render_id, writeln_indented},
+        Id, Printindex,
+        render::{ResolvedNodeLines, node_location, writeln_indented},
     },
 };
 
@@ -33,5 +33,13 @@ impl Printindex {
         writeln!(into)?;
 
         Ok(())
+    }
+}
+
+fn render_id(node: &Id, node_lines: &ResolvedNodeLines) -> String {
+    if let Some(ref nodename) = node.nodename {
+        format!("{} ({})", nodename, node_location(node_lines, node))
+    } else {
+        format!("({})", node_location(node_lines, node))
     }
 }
