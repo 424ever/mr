@@ -174,7 +174,7 @@ pub struct Verbatim {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableEntry {
-    title: String,
+    titles: Vec<String>,
     description: Vec<TextBlock>,
 }
 

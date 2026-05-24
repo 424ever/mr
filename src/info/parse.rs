@@ -391,17 +391,11 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
 }
 
 fn paragraph<'a>(min_indent: usize) -> impl Parser<Stream<'a>, Paragraph, ErrMode<ContextError>> {
-    fn valid_line(l: &str) -> bool {
-        !l.is_empty() && !l.chars().next().unwrap().is_space()
-    }
-
     (
-        opt(indented_line((min_indent + 1)..=(min_indent + 3)).verify(valid_line)),
+        opt(indented_line_exact((min_indent + 1)..=(min_indent + 3))),
         repeat(
             0..,
-            indented_line(min_indent)
-                .verify(valid_line)
-                .map(|l: &str| l.trim_end().to_string()),
+            indented_line_exact(min_indent).map(|l: &str| l.trim_end().to_string()),
         ),
     )
         .verify_map(|(more_indented_first, mut lines): (_, Vec<_>)| {
@@ -420,11 +414,11 @@ fn table_entry<'a>(
     min_indent: usize,
 ) -> impl Parser<Stream<'a>, TableEntry, ErrMode<ContextError>> {
     (
-        indented_line(min_indent),
+        repeat(1.., indented_line_exact(min_indent)),
         repeat(1.., text_block(min_indent + 5)),
     )
-        .map(|(title, description)| TableEntry {
-            title: title.to_string(),
+        .map(|(titles, description): (Vec<_>, _)| TableEntry {
+            titles: titles.iter().map(|l| l.to_string()).collect(),
             description,
         })
 }
@@ -445,6 +439,21 @@ fn indented_line<'a>(
         take_until(0.., '\n'),
         newline,
     )
+}
+
+fn indented_line_exact<'a>(
+    min_indent: impl Into<Range>,
+) -> impl Parser<Stream<'a>, &'a str, ErrMode<ContextError>> {
+    fn valid_line(l: &str) -> bool {
+        !l.is_empty() && !l.chars().next().unwrap().is_space()
+    }
+
+    delimited(
+        repeat::<_, _, (), _, _>(min_indent, ' ').take(),
+        take_until(0.., '\n'),
+        newline,
+    )
+    .verify(valid_line)
 }
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html

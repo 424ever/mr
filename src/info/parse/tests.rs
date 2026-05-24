@@ -246,7 +246,7 @@ fn test_table_entry() {
     assert_eq!(
         table_entry(0).parse(input),
         Ok(TableEntry {
-            title: "title".to_string(),
+            titles: vec!["title".to_string()],
             description: vec![
                 TextBlock {
                     content: TextBlockContent::Paragraph(Paragraph {
@@ -419,4 +419,27 @@ fn test_menu_at_end_of_node() {
             local_variables: None
         })
     );
+}
+
+#[test]
+fn test_table_entry_itemx() {
+    let input = make_stream(concat!(
+        "title\n",
+        "title2\n",
+        "     descr 1 line 1\n",
+        "     descr 1 line 2\n",
+    ));
+    assert_eq!(
+        text_block(0).parse(input),
+        Ok(TextBlock {
+            content: TextBlockContent::TableEntry(TableEntry {
+                titles: vec!["title".into(), "title2".into()],
+                description: vec![TextBlock {
+                    content: TextBlockContent::Paragraph(Paragraph {
+                        lines: vec!["descr 1 line 1".to_string(), "descr 1 line 2".to_string()]
+                    })
+                },]
+            })
+        })
+    )
 }

@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use glyphs::{Color, style};
+
 use crate::{
     RenderOptions,
     info::{
@@ -15,7 +17,9 @@ impl TableEntry {
         opt: RenderOptions,
         node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
-        writeln_indented(into, &self.title, opt)?;
+        self.titles
+            .iter()
+            .try_for_each(|t| writeln_indented(into, style(t).fg(Color::Cyan), opt))?;
         self.description
             .iter()
             .try_for_each(|n| n.render(into, opt.indented(5), node_lines))?;
