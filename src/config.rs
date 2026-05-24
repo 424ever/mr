@@ -47,13 +47,21 @@ impl Default for PagerSettings {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InfoSettings {
-    pub paths: Vec<SearchPath>,
+    paths: Vec<SearchPath>,
+}
+
+impl InfoSettings {
+    pub(crate) fn paths(&self) -> &Vec<SearchPath> {
+        &self.paths
+    }
 }
 
 impl Default for InfoSettings {
     fn default() -> Self {
         Self {
             paths: vec![
+                SearchPath::Immediate,
+                SearchPath::DirFile("/usr/share/info/dir".into()),
                 SearchPath::DirsFromEnv("INFOPATH".into()),
                 SearchPath::Dir("/usr/share/info".into()),
             ],
@@ -63,6 +71,8 @@ impl Default for InfoSettings {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SearchPath {
+    Immediate,
+    DirFile(PathBuf),
     DirsFromEnv(String),
     Dir(PathBuf),
 }

@@ -31,11 +31,17 @@ fn main() -> anyhow::Result<()> {
         RenderOptions::new()
     };
 
-    let content = String::from_utf8(read_maybe_gzipped_file(&cli.manual)?)?;
+    let path = info::search::search_manual(&config.info, &cli.manual)
+        .next()
+        .context("no matching manual found")?;
+
+    let content = String::from_utf8(read_maybe_gzipped_file(path.file())?)?;
     let manual =
         info::read_nonsplit_manual(&content).context(format!("reading {} failed", cli.manual))?;
 
-    let start_line = if let Some(ref node) = cli.node
+    let start_node = path.start_node().or(cli.node.as_deref());
+
+    let start_line = if let Some(ref node) = start_node
         && !cli.no_pager
     {
         manual.start_line_for(opt, node)?

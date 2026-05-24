@@ -1,5 +1,6 @@
 pub mod parse;
 mod render;
+pub mod search;
 
 use std::{collections::HashMap, io};
 
@@ -40,6 +41,10 @@ impl NonsplitManual {
 
     pub fn start_line_for(&self, opt: RenderOptions, node: &str) -> anyhow::Result<Option<usize>> {
         Ok(self.resolve_lines(opt)?.get(node).copied())
+    }
+
+    pub fn nodes(&self) -> &Vec<Node> {
+        &self.file.nodes
     }
 }
 
