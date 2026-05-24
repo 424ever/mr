@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    control::{DELETE, backspace, delete, null},
+    control::{DELETE, backspace, delete, form_feed, line_feed, null, unit_separator},
     parser_util::{StrContextExt, count, take_until_and_consume},
 };
 use unicode_segmentation::UnicodeSegmentation;
@@ -10,8 +10,8 @@ use winnow::{
         dec_uint, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
     },
     combinator::{
-        alt, delimited, dispatch, fail, not, opt, peek, preceded, repeat, repeat_till, seq,
-        terminated,
+        alt, cut_err, delimited, dispatch, eof, fail, not, opt, peek, preceded, repeat,
+        repeat_till, seq, terminated,
     },
     error::{ContextError, ErrMode, StrContext},
     stream::{AsChar, Offset as _, Range},
@@ -22,8 +22,12 @@ type Stream<'i> = &'i str;
 type Result<T> = winnow::ModalResult<T>;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
-// TODO: support optional form feeds
-const SEPARATOR: &str = "\x1f\x0a";
+fn separator(input: &mut Stream<'_>) -> Result<()> {
+    (opt(form_feed), unit_separator, opt(form_feed), line_feed)
+        .void()
+        .map_err(|_| ErrMode::Backtrack(ContextError::new()))
+        .parse_next(input)
+}
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 pub fn nonsplit_info_file(input: &mut Stream<'_>) -> Result<NonsplitInfoFile> {
@@ -66,7 +70,7 @@ fn split_info_subfile(input: &mut Stream<'_>) -> Result<SplitInfoSubfile> {
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Preamble.html
 fn preamble(input: &mut Stream<'_>) -> Result<Preamble> {
     // TODO: Don't bother parsing directory entries for now
-    let content = take_until(1.., SEPARATOR).parse_next(input)?.to_string();
+    let content = repeat_till(1.., any, peek(separator)).parse_next(input)?.0;
     Ok(Preamble { content })
 }
 
@@ -74,7 +78,7 @@ fn preamble(input: &mut Stream<'_>) -> Result<Preamble> {
 fn node(input: &mut Stream<'_>) -> Result<Node> {
     let invalid_id_chars = &[',', '\t'];
 
-    _ = SEPARATOR
+    _ = separator
         .context("node start".label())
         .context("separator".expected())
         .parse_next(input)?;
@@ -112,7 +116,14 @@ fn node(input: &mut Stream<'_>) -> Result<Node> {
         .parse_next(input)?
         .map(str::to_owned);
 
-    let general_text: Vec<_> = repeat(0.., text_block(0)).parse_next(input)?;
+    let general_text = repeat_till(
+        0..,
+        cut_err(text_block(0)),
+        alt((separator.void(), eof.void())),
+    )
+    .context("node body".label())
+    .parse_next(input)?
+    .0;
 
     Ok(Node {
         file,
@@ -127,8 +138,6 @@ fn node(input: &mut Stream<'_>) -> Result<Node> {
 
 fn text_block<'a>(min_indent: usize) -> impl Parser<Stream<'a>, TextBlock, ErrMode<ContextError>> {
     move |input: &mut Stream<'a>| {
-        not(peek(SEPARATOR)).parse_next(input)?;
-
         let content = if min_indent == 0 {
             alt((
                 top_level_text_block_content,
@@ -204,7 +213,6 @@ fn menu(input: &mut Stream<'_>) -> Result<Menu> {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Menu.html
 fn menu_item(input: &mut Stream<'_>) -> Result<MenuItem> {
-    not(peek(SEPARATOR)).parse_next(input)?;
     alt((
         menu_entry_without_label
             .context("item without label".label())
@@ -463,7 +471,7 @@ fn node_spec(terminating_chars: &[char]) -> impl Parser<Stream<'_>, String, Cont
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Tag-Table.html
 fn tag_table(input: &mut Stream<'_>) -> Result<TagTable> {
-    let _ = SEPARATOR
+    let _ = separator
         .context("separator".expected())
         .parse_next(input)?;
     let _ = "Tag Table:\n"
@@ -477,7 +485,7 @@ fn tag_table(input: &mut Stream<'_>) -> Result<TagTable> {
     .context("tag table".label())
     .parse_next(input);
 
-    let _ = SEPARATOR
+    let _ = separator
         .context("separator".expected())
         .parse_next(input)?;
     let _ = "End Tag Table\n\n"
@@ -509,7 +517,7 @@ fn tag(input: &mut Stream<'_>) -> Result<Tag> {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Local-Variables.html
 fn local_variables(input: &mut Stream<'_>) -> Result<LocalVariables> {
-    let _ = SEPARATOR
+    let _ = separator
         .context("separator".expected())
         .parse_next(input)?;
     let _ = "Local Variables:\n".parse_next(input)?;

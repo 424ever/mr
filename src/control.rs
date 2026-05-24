@@ -6,9 +6,29 @@ use winnow::{
     token,
 };
 
-pub const NULL: char = '\x00';
 pub const BACKSPACE: char = '\x08';
 pub const DELETE: char = '\x7f';
+pub const FORM_FEED: char = '\x0c';
+pub const NULL: char = '\x00';
+pub const UNIT_SEPARATOR: char = '\x1f';
+pub const LINE_FEED: char = '\x0a';
+
+/// ^L
+pub fn form_feed<S: Stream + StreamIsPartial + Compare<char>>(input: &mut S) -> Result<S::Slice> {
+    token::literal(FORM_FEED).parse_next(input)
+}
+
+/// ^_
+pub fn unit_separator<S: Stream + StreamIsPartial + Compare<char>>(
+    input: &mut S,
+) -> Result<S::Slice> {
+    token::literal(UNIT_SEPARATOR).parse_next(input)
+}
+
+/// ^J
+pub fn line_feed<S: Stream + StreamIsPartial + Compare<char>>(input: &mut S) -> Result<S::Slice> {
+    token::literal(LINE_FEED).parse_next(input)
+}
 
 /// ^@
 pub fn null<S: Stream + StreamIsPartial + Compare<char>>(input: &mut S) -> Result<S::Slice> {
