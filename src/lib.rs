@@ -43,7 +43,7 @@ impl RenderOptions {
     pub fn indented(&self, indent: usize) -> Self {
         Self {
             indent: self.indent + indent,
-            max_width: self.max_width - indent,
+            max_width: self.max_width.saturating_sub(indent),
         }
     }
 
