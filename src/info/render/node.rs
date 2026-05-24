@@ -1,12 +1,12 @@
 use std::io::Write;
 
-use glyphs::style;
+use glyphs::{Color, style};
 
 use crate::{
     RenderOptions,
     info::{
-        Node, TextBlock, TextBlockContent,
-        render::{ResolvedNodeLines, writeln_indented},
+        Id, Node, TextBlock, TextBlockContent,
+        render::{ResolvedNodeLines, color_escape, color_reset, node_location, writeln_indented},
     },
 };
 
@@ -17,10 +17,43 @@ impl Node {
         opt: &RenderOptions,
         node_lines: &ResolvedNodeLines,
     ) -> anyhow::Result<()> {
+        // node line
+        writeln!(
+            into,
+            "{}-- Node: {}{}{}{}{}",
+            color_escape(Color::BrightBlack),
+            self.node.nodename.as_deref().unwrap_or("?unknown?"),
+            render_referenced_node(self.next.as_ref(), "Next", node_lines),
+            render_referenced_node(self.prev.as_ref(), "Prev", node_lines),
+            render_referenced_node(self.up.as_ref(), "Up", node_lines),
+            color_reset()
+        )?;
+        // content
         let opt = opt.indented(7);
         self.general_text
             .iter()
             .try_for_each(|b| b.render(into, opt, node_lines))
+    }
+}
+
+fn render_referenced_node(
+    id: Option<&Id>,
+    ref_name: &str,
+    node_lines: &ResolvedNodeLines,
+) -> String {
+    if let Some(id) = id {
+        if let Some(ref nodename) = id.nodename {
+            format!(
+                ", {}: {} ({})",
+                ref_name,
+                nodename,
+                node_location(node_lines, id)
+            )
+        } else {
+            format!(", {}: ({})", ref_name, node_location(node_lines, id))
+        }
+    } else {
+        "".into()
     }
 }
 

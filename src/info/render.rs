@@ -13,7 +13,7 @@ use std::{
     iter::Peekable,
 };
 
-use glyphs::{Color, Styled, style};
+use glyphs::Color;
 use itertools::Itertools as _;
 use unicode_segmentation::UnicodeSegmentation as _;
 
@@ -57,8 +57,8 @@ impl NonsplitInfoFile {
     }
 }
 
-fn node_location(map: &ResolvedNodeLines, id: &Id) -> Styled {
-    style(match (&id.infofile, &id.nodename) {
+fn node_location(map: &ResolvedNodeLines, id: &Id) -> String {
+    match (&id.infofile, &id.nodename) {
         (None, Some(name)) => match map.get(name) {
             Some(line) => format!("{}G", line),
             None => "?".repeat(MAX_REF_DIGITS + 1),
@@ -71,9 +71,15 @@ fn node_location(map: &ResolvedNodeLines, id: &Id) -> Styled {
                 format!("in manual `{}`", file)
             }
         }
-    })
-    .bold()
-    .fg(Color::Blue)
+    }
+}
+
+fn color_escape(color: Color) -> impl Display {
+    format!("\x1b[{}m", color.fg_code())
+}
+
+fn color_reset() -> impl Display {
+    format_args!("\x1b[0m")
 }
 
 struct FlowingLines<S, I>

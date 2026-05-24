@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use glyphs::{style, visible_len};
+use glyphs::{Color, style, visible_len};
 
 use crate::{
     RenderOptions,
@@ -89,8 +89,15 @@ fn render_entry_id(entry: &MenuEntry, map: &ResolvedNodeLines) -> String {
     };
 
     if let Some(label) = label {
-        format!("{} ({})", label, node_location(map, &entry.id))
+        format!(
+            "{} ({})",
+            label,
+            style(node_location(map, &entry.id)).bold().fg(Color::Blue)
+        )
     } else {
-        format!("({})", node_location(map, &entry.id))
+        format!(
+            "({})",
+            style(node_location(map, &entry.id)).bold().fg(Color::Blue)
+        )
     }
 }

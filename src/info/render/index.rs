@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use glyphs::style;
+use glyphs::{Color, style};
 
 use crate::{
     RenderOptions,
@@ -40,6 +40,11 @@ fn render_id(node: &Id, node_lines: &ResolvedNodeLines) -> String {
     if let Some(ref nodename) = node.nodename {
         format!("{} ({})", nodename, node_location(node_lines, node))
     } else {
-        format!("({})", node_location(node_lines, node))
+        format!(
+            "({})",
+            style(node_location(node_lines, node))
+                .bold()
+                .fg(Color::Blue)
+        )
     }
 }
