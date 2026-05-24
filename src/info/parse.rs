@@ -5,6 +5,7 @@ use crate::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 use winnow::{
+    Parser,
     ascii::{
         dec_uint, line_ending, multispace0, multispace1, newline, space0, space1, till_line_ending,
     },
@@ -13,11 +14,11 @@ use winnow::{
         terminated,
     },
     error::{ContextError, ErrMode, StrContext},
-    stream::{AsChar, Location, Offset as _, Range},
+    stream::{AsChar, Offset as _, Range},
     token::{any, literal, one_of, take_till, take_until},
 };
 
-type Stream<'i> = LocatingSlice<&'i str>;
+type Stream<'i> = &'i str;
 type Result<T> = winnow::ModalResult<T>;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
@@ -71,58 +72,47 @@ fn preamble(input: &mut Stream<'_>) -> Result<Preamble> {
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Regular-Nodes.html
 fn node(input: &mut Stream<'_>) -> Result<Node> {
-    let invalid_id_chars = &[','];
+    let invalid_id_chars = &[',', '\t'];
 
     _ = SEPARATOR
         .context("node start".label())
         .context("separator".expected())
         .parse_next(input)?;
-    _ = ("File:", space1)
-        .context("node file text".expected())
-        .parse_next(input)?;
-    let file = take_until_and_consume(1.., ",")
-        .context("node file name".expected())
-        .map(|s: &str| s.to_string())
-        .parse_next(input)?;
-    _ = space1.context("whitespace".expected()).parse_next(input)?;
-    _ = ("Node:", space1)
-        .context("node name text".expected())
-        .parse_next(input)?;
-    let node = id(&[','])
-        .context("node name id".expected())
-        .parse_next(input)?;
-    _ = (
-        ",".context("comma".expected()),
-        space1.context("whitespace".expected()),
+
+    let file = delimited(
+        ("File:", space1),
+        take_until_and_consume(1.., ",").map(|s: &str| s.to_string()),
+        space1,
     )
-        .context("space after node name".label())
-        .parse_next(input)?;
-    let next = opt(delimited(
-        (
-            "Next:".context("node next text".expected()),
-            space1.context("whitespace".expected()),
-        ),
-        id(invalid_id_chars).context("node next".expected()),
-        (",", space1),
-    ))
     .parse_next(input)?;
-    let prev = opt(delimited(
-        ("Prev:".context("node prev text".expected()), space1),
-        id(invalid_id_chars).context("node prev".expected()),
-        (",", space1),
+
+    let node = preceded(("Node:", space1), id(invalid_id_chars))
+        .context("node identifier".label())
+        .parse_next(input)?;
+
+    let next = opt(preceded(
+        (",", space1, "Next:", space1),
+        id(invalid_id_chars),
     ))
+    .context("next node".label())
     .parse_next(input)?;
-    let _ = ("Up:".context("node up text".expected()), space1).parse_next(input)?;
-    let up = id(invalid_id_chars)
-        .context("node up".expected())
-        .parse_next(input)?;
-    let _ = "\n\n".parse_next(input)?;
 
-    let start_offset = input.current_token_start();
+    let prev = opt(preceded(
+        (",", space1, "Prev:", space1),
+        id(invalid_id_chars),
+    ))
+    .context("prev node".label())
+    .parse_next(input)?;
 
-    let general_text: Vec<_> = repeat(0.., text_block(0))
-        .context("general text".label())
+    let up = opt(preceded((",", space1, "Up:", space1), id(invalid_id_chars)))
+        .context("up node".label())
         .parse_next(input)?;
+
+    let descr = terminated(opt(preceded("\t", take_until(1.., "\n"))), "\n\n")
+        .parse_next(input)?
+        .map(str::to_owned);
+
+    let general_text: Vec<_> = repeat(0.., text_block(0)).parse_next(input)?;
 
     Ok(Node {
         file,
@@ -130,16 +120,14 @@ fn node(input: &mut Stream<'_>) -> Result<Node> {
         next,
         prev,
         up,
+        descr,
         general_text,
-        start_offset,
     })
 }
 
 fn text_block<'a>(min_indent: usize) -> impl Parser<Stream<'a>, TextBlock, ErrMode<ContextError>> {
     move |input: &mut Stream<'a>| {
         not(peek(SEPARATOR)).parse_next(input)?;
-
-        let start_offset = input.current_token_start();
 
         let content = if min_indent == 0 {
             alt((
@@ -151,15 +139,9 @@ fn text_block<'a>(min_indent: usize) -> impl Parser<Stream<'a>, TextBlock, ErrMo
             nestable_text_block_content(min_indent).parse_next(input)
         }?;
 
-        let end_offset = input.previous_token_end();
-
         repeat::<_, _, (), _, _>(0.., line_ending).parse_next(input)?;
 
-        Ok(TextBlock {
-            start_offset,
-            end_offset,
-            content,
-        })
+        Ok(TextBlock { content })
     }
 }
 
@@ -247,9 +229,13 @@ fn menu_entry_with_label(input: &mut Stream<'_>) -> Result<MenuEntry> {
     ))
     .parse_next(input)?
     .to_string();
+
+    _ = space0.parse_next(input)?;
+
     let id = id(&['.', ',']).parse_next(input)?;
     _ = alt(('.', ',')).parse_next(input)?;
-    let description = preceded(
+
+    let description = opt(preceded(
         space1,
         repeat(
             0..,
@@ -258,8 +244,9 @@ fn menu_entry_with_label(input: &mut Stream<'_>) -> Result<MenuEntry> {
                 take_until_and_consume(1.., '\n').map(|l: &str| l.trim().to_string()),
             ),
         ),
-    )
-    .parse_next(input)?;
+    ))
+    .parse_next(input)?
+    .unwrap_or_default();
     let trailing_newlines = count(0.., newline).parse_next(input)?;
 
     Ok(MenuEntry {
@@ -370,7 +357,7 @@ fn index_entry(input: &mut Stream<'_>) -> Result<IndexEntry> {
                 .rsplit_once('.')
                 .ok_or(ErrMode::Backtrack(ContextError::new()))?;
 
-            text_and_spec(input.next_slice(rest.offset_from(input.as_ref()) - 1))?
+            text_and_spec(input.next_slice(rest.offset_from(input) - 1))?
         }
         Some(_) => return Err(ErrMode::Backtrack(ContextError::new())),
         None => return Err(ErrMode::Backtrack(ContextError::new())),
@@ -547,255 +534,4 @@ fn indirect_entry(_input: &mut Stream<'_>) -> Result<IndirectEntry> {
 }
 
 #[cfg(test)]
-mod tests {
-    use winnow::{LocatingSlice, Parser as _, combinator::repeat};
-
-    use super::*;
-
-    #[test]
-    fn node_with_menu() {
-        let input = LocatingSlice::new(concat!(
-            "Heading\n",
-            "*******\n",
-            "\n",
-            "Text\n",
-            "\n",
-            "* Menu:\n",
-            "\n",
-            "* Item 1:: Description\n",
-            "* Label:Item 2. Description\n",
-        ));
-        assert_eq!(
-            repeat(1.., text_block(0),).parse(input),
-            Ok(vec![
-                TextBlock {
-                    start_offset: 0,
-                    end_offset: 16,
-                    content: TextBlockContent::Heading(Heading {
-                        level: HeadingLevel::Major,
-                        text: "Heading".to_string()
-                    })
-                },
-                TextBlock {
-                    start_offset: 17,
-                    end_offset: 22,
-                    content: TextBlockContent::Paragraph(Paragraph {
-                        lines: vec!["Text".into()]
-                    })
-                },
-                TextBlock {
-                    start_offset: 23,
-                    end_offset: 83,
-                    content: TextBlockContent::Menu(Menu {
-                        items: vec![
-                            MenuItem::Entry(MenuEntry {
-                                label: None,
-                                description: vec!["Description".into()],
-                                id: Id {
-                                    infofile: None,
-                                    nodename: Some("Item 1".into())
-                                },
-                                trailing_newlines: 0
-                            }),
-                            MenuItem::Entry(MenuEntry {
-                                label: Some("Label".into()),
-                                description: vec!["Description".into()],
-                                id: Id {
-                                    infofile: None,
-                                    nodename: Some("Item 2".into())
-                                },
-                                trailing_newlines: 0
-                            })
-                        ]
-                    })
-                }
-            ])
-        );
-    }
-
-    #[test]
-    fn node_name_with_special_chars() {
-        let input = LocatingSlice::new(concat!(
-            "\x1f\n",
-            "File: file.info,  Node: node: 1,  Next: node (2),  Prev: (other)node 0,  Up: (dir)\n",
-            "\n",
-        ));
-        let node = node.parse(input);
-        assert_eq!(
-            node,
-            Ok(Node {
-                file: "file.info".to_string(),
-                node: Id {
-                    infofile: None,
-                    nodename: Some("node: 1".to_string())
-                },
-                next: Some(Id {
-                    infofile: None,
-                    nodename: Some("node (2)".to_string())
-                }),
-                prev: Some(Id {
-                    infofile: Some("other".to_string()),
-                    nodename: Some("node 0".to_string())
-                }),
-                up: Id {
-                    infofile: Some("dir".to_string()),
-                    nodename: None
-                },
-                general_text: vec![],
-                start_offset: 86,
-            })
-        );
-    }
-
-    #[test]
-    fn test_menu() {
-        let input = LocatingSlice::new(concat!(
-            "* Menu:\n",
-            "A comment paragraph\n",
-            "\n",
-            "* Item 1:: Description I\n",
-            "Description II\n",
-            "\n",
-            "\n",
-            "Another comment paragraph\n",
-            "with 2 lines\n",
-            "* Item 2:: Description I\n",
-            " Description II\n",
-            "* Label for item 3:Item 3. Description\n",
-            "* Item 4::\n",
-            "\n",
-        ));
-
-        assert_eq!(
-            menu.parse(input),
-            Ok(Menu {
-                items: vec![
-                    MenuItem::Comment(MenuComment {
-                        lines: vec!["A comment paragraph".into()],
-                        trailing_newlines: 1
-                    }),
-                    MenuItem::Entry(MenuEntry {
-                        label: None,
-                        description: vec!["Description I".into(), "Description II".into()],
-                        id: Id {
-                            infofile: None,
-                            nodename: Some("Item 1".into())
-                        },
-                        trailing_newlines: 2
-                    }),
-                    MenuItem::Comment(MenuComment {
-                        lines: vec!["Another comment paragraph".into(), "with 2 lines".into()],
-                        trailing_newlines: 0
-                    }),
-                    MenuItem::Entry(MenuEntry {
-                        label: None,
-                        description: vec!["Description I".into(), "Description II".into()],
-                        id: Id {
-                            infofile: None,
-                            nodename: Some("Item 2".into())
-                        },
-                        trailing_newlines: 0
-                    }),
-                    MenuItem::Entry(MenuEntry {
-                        label: Some("Label for item 3".into()),
-                        description: vec!["Description".into()],
-                        id: Id {
-                            infofile: None,
-                            nodename: Some("Item 3".into())
-                        },
-                        trailing_newlines: 0
-                    }),
-                    MenuItem::Entry(MenuEntry {
-                        label: None,
-                        description: vec![],
-                        id: Id {
-                            infofile: None,
-                            nodename: Some("Item 4".into())
-                        },
-                        trailing_newlines: 1
-                    }),
-                ]
-            })
-        );
-    }
-
-    #[test]
-    fn test_paragraph() {
-        let input = LocatingSlice::new(concat!("Line 1\n"));
-        assert_eq!(
-            paragraph(0).parse(input),
-            Ok(Paragraph {
-                lines: vec!["Line 1".into()]
-            })
-        );
-
-        let input = LocatingSlice::new(concat!("Line 1\n", "Line 2\n"));
-        assert_eq!(
-            paragraph(0).parse(input),
-            Ok(Paragraph {
-                lines: vec!["Line 1".into(), "Line 2".into(),]
-            })
-        );
-
-        let input = LocatingSlice::new(concat!("   Line 1\n", "Line 2\n"));
-        assert_eq!(
-            paragraph(0).parse(input),
-            Ok(Paragraph {
-                lines: vec!["Line 1".into(), "Line 2".into(),]
-            })
-        );
-
-        let input = LocatingSlice::new(concat!("  Line 1\n", "  Line 2\n"));
-        assert!(paragraph(0).parse(input.clone()).is_err());
-        assert_eq!(
-            paragraph(2).parse(input),
-            Ok(Paragraph {
-                lines: vec!["Line 1".into(), "Line 2".into(),]
-            })
-        );
-
-        let input = LocatingSlice::new(concat!("     Line 1\n", "  Line 2\n"));
-        assert!(paragraph(0).parse(input.clone()).is_err());
-        assert_eq!(
-            paragraph(2).parse(input),
-            Ok(Paragraph {
-                lines: vec!["Line 1".into(), "Line 2".into(),]
-            })
-        );
-    }
-
-    #[test]
-    fn test_table_entry() {
-        let input = LocatingSlice::new(concat!(
-            "title\n",
-            "     descr 1 line 1\n",
-            "     descr 1 line 2\n",
-            "\n",
-            "     descr 2 line 1\n",
-            "     descr 2 line 2\n",
-            "\n"
-        ));
-        assert_eq!(
-            table_entry(0).parse(input),
-            Ok(TableEntry {
-                title: "title".to_string(),
-                description: vec![
-                    TextBlock {
-                        start_offset: 6,
-                        end_offset: 46,
-                        content: TextBlockContent::Paragraph(Paragraph {
-                            lines: vec!["descr 1 line 1".to_string(), "descr 1 line 2".to_string()]
-                        })
-                    },
-                    TextBlock {
-                        start_offset: 47,
-                        end_offset: 87,
-                        content: TextBlockContent::Paragraph(Paragraph {
-                            lines: vec!["descr 2 line 1".to_string(), "descr 2 line 2".to_string()]
-                        })
-                    }
-                ]
-            })
-        )
-    }
-}
+mod tests;

@@ -26,3 +26,6 @@ toml_edit = { version = "0.25.11", features = ["serde"] }
 unicode-segmentation = "1.13.2"
 winnow = { version = "1.0.1", features = ["parser"]}
 xdg = "3.0.0"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"

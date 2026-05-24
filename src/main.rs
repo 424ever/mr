@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{self, ErrorKind},
+    io::{self, ErrorKind, Write as _},
 };
 
 use anyhow::Context;
@@ -15,6 +15,9 @@ struct Cli {
     /// do not use a pager
     #[arg(long)]
     no_pager: bool,
+    /// print the abstract syntax tree instead of manual
+    #[arg(long)]
+    print_ast: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -37,15 +40,26 @@ fn main() -> anyhow::Result<()> {
         RenderOptions::new()
     };
 
-    if let Err(e) = manual.render(&mut output, opt) {
-        if let Some(ioe) = e.downcast_ref::<io::Error>()
-            && ioe.kind() != ErrorKind::BrokenPipe
-        {
-            return Err(e);
-        }
+    if cli.print_ast {
+        ignore_broken_pipe(
+            write!(output, "{:#?}", manual).context("writing ast to output failed"),
+        )?;
+    } else {
+        ignore_broken_pipe(manual.render(&mut output, opt))?;
     }
 
     output.wait()?;
 
     Ok(())
+}
+
+fn ignore_broken_pipe(r: anyhow::Result<()>) -> anyhow::Result<()> {
+    if let Err(ref e) = r {
+        if let Some(ioe) = e.downcast_ref::<io::Error>()
+            && ioe.kind() == ErrorKind::BrokenPipe
+        {
+            return Ok(());
+        }
+    }
+    r
 }

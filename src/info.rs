@@ -1,12 +1,12 @@
 pub mod parse;
 mod render;
 
-use winnow::{LocatingSlice, Parser};
+use winnow::Parser as _;
 
 // https://www.gnu.org/software/texinfo/manual/texinfo/html_node/Info-Format-Whole-Manual.html
 pub fn read_nonsplit_manual(content: &str) -> anyhow::Result<NonsplitInfoFile> {
     parse::nonsplit_info_file
-        .parse(LocatingSlice::new(&content))
+        .parse(&content)
         .map_err(|e| anyhow::format_err!("{e}"))
 }
 
@@ -43,18 +43,13 @@ pub struct Node {
     node: Id,
     next: Option<Id>,
     prev: Option<Id>,
-    up: Id,
+    up: Option<Id>,
+    descr: Option<String>,
     general_text: Vec<TextBlock>,
-    /// Offset (in bytes) at which `general_text` starts within the file
-    start_offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextBlock {
-    /// Offset (in bytes) from the start of the file where `content` starts
-    start_offset: usize,
-    /// Offset (in bytes) from the start of the file where `content` ends
-    end_offset: usize,
     content: TextBlockContent,
 }
 
